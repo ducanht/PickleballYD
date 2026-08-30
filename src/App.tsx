@@ -95,6 +95,15 @@ export default function App() {
             element={<AppLayout><PublicSchedulePage /></AppLayout>}
           />
 
+          <Route
+            path="/tournaments"
+            element={<AppLayout><TournamentListPage /></AppLayout>}
+          />
+          <Route
+            path="/tournaments/:id"
+            element={<AppLayout><TournamentDetailPage /></AppLayout>}
+          />
+
           {/* ── VIEWER+ ROUTES (auth required) ────────────────────────────── */}
           <Route
             path="/members"
@@ -117,22 +126,6 @@ export default function App() {
             element={
               <RoleGuard requiredRole="VIEWER">
                 <AppLayout><FinanceDashboard /></AppLayout>
-              </RoleGuard>
-            }
-          />
-          <Route
-            path="/tournaments"
-            element={
-              <RoleGuard requiredRole="VIEWER">
-                <AppLayout><TournamentListPage /></AppLayout>
-              </RoleGuard>
-            }
-          />
-          <Route
-            path="/tournaments/:id"
-            element={
-              <RoleGuard requiredRole="VIEWER">
-                <AppLayout><TournamentDetailPage /></AppLayout>
               </RoleGuard>
             }
           />
