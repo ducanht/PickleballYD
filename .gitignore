@@ -1,0 +1,47 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+firebase-debug.log*
+firestore-debug.log*
+
+# Dependencies & Build
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+!.env.example
+*.pem
+*.key
+serviceAccountKey*.json
+google-services.json
+
+# Editor & System
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Code Graph & Local Tools
+.code-review-graph/
+*.db
+*.sqlite
+*.sqlite3
+.superpowers/

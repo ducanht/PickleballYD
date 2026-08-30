@@ -1,0 +1,17 @@
+{
+  "name": "Pickleball Yến Đình Hub",
+  "short_name": "Pickleball YD",
+  "description": "Hệ thống quản lý hội cựu học sinh & giải đấu thể thao Yên Định 1998-2001",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B0F19",
+  "theme_color": "#f97316",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
