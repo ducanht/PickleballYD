@@ -65,6 +65,10 @@ export function validateRotatingSchedule(input: ScheduleValidatorInput): Schedul
         playerStats[a].matchesPlayed++;
         playerStats[a].partners.push(b);
       }
+      if (playerStats[b]) {
+        playerStats[b].matchesPlayed++;
+        playerStats[b].partners.push(a);
+      }
       const pairKey = [a, b].sort().join(':');
       pairStats[pairKey] = (pairStats[pairKey] || 0) + 1;
     };

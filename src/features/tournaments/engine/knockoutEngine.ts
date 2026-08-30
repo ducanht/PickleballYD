@@ -96,23 +96,32 @@ export function validateKnockoutBracket(
 export function advanceWinner(
   bracket: KnockoutBracket,
   winnerNodeId: string,
-  _loserNodeId: string
+  winnerSide?: 'TEAM1' | 'TEAM2'
 ): KnockoutBracket {
   const nodeMap = new Map(bracket.nodes.map((n) => [n.id, n]));
   const node = nodeMap.get(winnerNodeId);
 
   if (!node) throw new Error(`Node ${winnerNodeId} không tìm thấy trong bracket`);
 
+  const effectiveWinner = winnerSide ?? node.winner;
   const winningTeamName =
-    node.winner === 'TEAM1' ? node.team1Name : node.winner === 'TEAM2' ? node.team2Name : null;
+    effectiveWinner === 'TEAM1' ? node.team1Name : effectiveWinner === 'TEAM2' ? node.team2Name : null;
 
   if (!winningTeamName) throw new Error(`Node ${winnerNodeId} chưa có kết quả thắng`);
 
-  if (!node.nextNodeId) return bracket; // Final — no advancement
+  const updatedCurrentNode = { ...node, winner: effectiveWinner };
+
+  if (!node.nextNodeId) {
+    return {
+      ...bracket,
+      nodes: bracket.nodes.map((n) => (n.id === node.id ? updatedCurrentNode : n)),
+    };
+  }
 
   const isOdd = node.position % 2 !== 0;
 
   const newNodes = bracket.nodes.map((n) => {
+    if (n.id === node.id) return updatedCurrentNode;
     if (n.id === node.nextNodeId) {
       return isOdd
         ? { ...n, team1Name: winningTeamName }

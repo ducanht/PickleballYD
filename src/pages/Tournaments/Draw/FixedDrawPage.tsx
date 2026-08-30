@@ -35,7 +35,6 @@ export default function FixedDrawPage() {
 
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [existingTeams, setExistingTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
@@ -60,7 +59,6 @@ export default function FixedDrawPage() {
       .then(([t, p, teams]) => {
         setTournament(t);
         setParticipants(p);
-        setExistingTeams(teams);
 
         if (t?.config.groups.numberOfGroups) {
           setNumGroups(t.config.groups.numberOfGroups);

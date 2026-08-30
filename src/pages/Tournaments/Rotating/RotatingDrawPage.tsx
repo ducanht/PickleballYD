@@ -14,7 +14,6 @@ import {
   ArrowLeft,
   Trophy,
   Repeat,
-  Calendar,
   CheckCircle2,
   AlertTriangle,
   Loader2,

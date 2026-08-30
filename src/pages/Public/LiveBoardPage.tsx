@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   getTournament,
@@ -21,7 +21,7 @@ export default function LiveBoardPage() {
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
-  const fetchData = () => {
+  const fetchData = useCallback(() => {
     if (!id) return;
     Promise.all([
       getTournament(id),
@@ -58,14 +58,14 @@ export default function LiveBoardPage() {
         setLastRefreshed(new Date());
       })
       .finally(() => setLoading(false));
-  };
+  }, [id]);
 
   useEffect(() => {
     fetchData();
     // Polling every 5 seconds for live board updates
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
-  }, [id]);
+  }, [fetchData]);
 
   const toggleFullScreen = () => {
     if (!document.fullscreenElement) {

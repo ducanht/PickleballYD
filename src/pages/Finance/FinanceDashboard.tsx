@@ -7,7 +7,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Wallet, TrendingUp, TrendingDown, Scale,
-  Plus, Filter, Download, X, Ban, Receipt,
+  Plus, Download, X, Ban, Receipt,
 } from 'lucide-react';
 import {
   getTransactions,
@@ -37,7 +37,6 @@ export default function FinanceDashboard() {
   const [summary, setSummary] = useState({ totalIn: 0, totalOut: 0, balance: 0 });
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FinanceFilter>({ status: 'CONFIRMED' });
-  const [showFilters, setShowFilters] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [voidTarget, setVoidTarget] = useState<Finance | null>(null);
   const [voidReason, setVoidReason] = useState('');
