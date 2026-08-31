@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   getTournament,
@@ -14,11 +14,10 @@ import { drawTeams } from '../../../features/fixedDoubles/teamDrawEngine';
 import { drawGroups } from '../../../features/fixedDoubles/groupDrawEngine';
 import { generateRoundRobin } from '../../../features/fixedDoubles/fixtureGenerator';
 import { useIsEditor } from '../../../contexts/AuthContext';
-import type { Tournament, Participant, Team, TournamentGroup, Match, EnginePlayer } from '../../../types';
+import type { Tournament, Participant, Match, EnginePlayer, GenderMode } from '../../../types';
 import {
   ArrowLeft,
   Trophy,
-  Users,
   Shuffle,
   Layers,
   Calendar,
@@ -27,6 +26,12 @@ import {
   Loader2,
   Sparkles,
 } from 'lucide-react';
+
+const GENDER_MODE_LABEL: Record<GenderMode, string> = {
+  MALE: 'Đôi Nam',
+  FEMALE: 'Đôi Nữ',
+  MIXED: 'Đôi Nam Nữ / Hỗn Hợp',
+};
 
 export default function FixedDrawPage() {
   const { id } = useParams<{ id: string }>();
@@ -60,8 +65,11 @@ export default function FixedDrawPage() {
         setTournament(t);
         setParticipants(p);
 
-        if (t?.config.groups.numberOfGroups) {
+        if (t?.config.groups?.numberOfGroups) {
           setNumGroups(t.config.groups.numberOfGroups);
+        }
+        if (t?.config.groups?.assignmentMode) {
+          setGroupDrawMode(t.config.groups.assignmentMode);
         }
 
         // If teams already exist in Firestore, initialize with existing teams
@@ -110,6 +118,8 @@ export default function FixedDrawPage() {
     );
   }
 
+  const genderMode = tournament.config.participants?.genderMode || 'MIXED';
+
   // ── Step 1 Handler: Run Team Draw ──────────────────────────────────────────
   const handleDrawTeams = () => {
     if (participants.length < 2) {
@@ -121,14 +131,21 @@ export default function FixedDrawPage() {
       return;
     }
 
-    const enginePlayers: EnginePlayer[] = participants.map((p) => ({
-      id: p.id,
-      name: p.name,
-    }));
-
-    const seed = `${tournament.id}-${Date.now()}`;
-    const result = drawTeams(enginePlayers, seed);
-    setDrawnTeams(result.teams);
+    try {
+      const seed = `${tournament.id}-${Date.now()}`;
+      const result = drawTeams({
+        players: participants.map((p) => ({
+          id: p.id,
+          name: p.name,
+          gender: p.gender,
+        })),
+        genderMode,
+        seed,
+      });
+      setDrawnTeams(result.teams);
+    } catch (err: unknown) {
+      alert((err as Error).message || 'Lỗi bốc thăm ghép cặp');
+    }
   };
 
   // ── Step 2 Handler: Run Group Draw ─────────────────────────────────────────
@@ -151,381 +168,484 @@ export default function FixedDrawPage() {
 
     const mapped = res.groups.map((g) => ({
       name: g.name,
-      teamIndices: g.teamIds.map((idxStr) => Number(idxStr)),
+      teamIndices: g.teamIds.map(Number),
     }));
 
     setDrawnGroups(mapped);
+  };
 
-    // Generate preview fixtures for all groups
-    const allMatches: Omit<Match, 'id' | 'updatedAt' | 'completedAt'>[] = [];
-    let matchOrder = 1;
+  // ── Step 3 Handler: Generate Fixtures Preview ──────────────────────────────
+  const handleGeneratePreview = () => {
+    if (drawnGroups.length === 0) {
+      alert('Vui lòng bốc thăm chia bảng trước.');
+      return;
+    }
 
-    for (const grp of mapped) {
-      const fixtures = generateRoundRobin({
-        teamIds: grp.teamIndices.map((idx) => String(idx)),
-        groupId: grp.name,
-        courts: tournament.config.scheduling.courts || 2,
+    const courts = tournament.config.scheduling?.courts || 2;
+    const generated: Omit<Match, 'id' | 'updatedAt' | 'completedAt'>[] = [];
+    let globalOrder = 1;
+
+    for (let gIdx = 0; gIdx < drawnGroups.length; gIdx++) {
+      const g = drawnGroups[gIdx];
+      const teamIds = g.teamIndices.map(String);
+      const schedule = generateRoundRobin({
+        groupId: `temp-group-${gIdx}`,
+        teamIds,
+        courts,
       });
 
-      for (const fx of fixtures.matches) {
-        const t1Idx = Number(fx.team1[0]);
-        const t2Idx = Number(fx.team2[0]);
-        const team1Data = drawnTeams[t1Idx];
-        const team2Data = drawnTeams[t2Idx];
+      for (const m of schedule.matches) {
+        const idx1 = Number(m.team1[0]);
+        const idx2 = Number(m.team2[0]);
+        const t1 = drawnTeams[idx1];
+        const t2 = drawnTeams[idx2];
 
-        if (team1Data && team2Data) {
-          allMatches.push({
-            stage: 'GROUP',
-            round: fx.round,
-            groupId: grp.name,
-            order: matchOrder++,
-            courtId: fx.courtId,
-            team1: {
-              p1Id: team1Data.p1.id,
-              p1Name: team1Data.p1.name,
-              p2Id: team1Data.p2.id,
-              p2Name: team1Data.p2.name,
-            },
-            team2: {
-              p1Id: team2Data.p1.id,
-              p1Name: team2Data.p1.name,
-              p2Id: team2Data.p2.id,
-              p2Name: team2Data.p2.name,
-            },
-            games: [{ score1: 0, score2: 0 }],
-            score1Total: 0,
-            score2Total: 0,
-            winner: 'NONE',
-            status: 'SCHEDULED',
-            operatorId: null,
-          });
-        }
+        generated.push({
+          stage: 'GROUP',
+          round: m.round,
+          groupId: `group-${g.name}`,
+          order: globalOrder++,
+          courtId: m.courtId,
+          team1: {
+            p1Id: t1.p1.id,
+            p1Name: t1.p1.name,
+            p2Id: t1.p2.id,
+            p2Name: t1.p2.name,
+          },
+          team2: {
+            p1Id: t2.p1.id,
+            p1Name: t2.p1.name,
+            p2Id: t2.p2.id,
+            p2Name: t2.p2.name,
+          },
+          games: [{ score1: 0, score2: 0 }],
+          score1Total: 0,
+          score2Total: 0,
+          winner: 'NONE',
+          status: 'SCHEDULED',
+          operatorId: null,
+        });
       }
     }
 
-    setPreviewMatches(allMatches);
+    setPreviewMatches(generated);
     setStep(3);
   };
 
-  // ── Step 3 Handler: Save All to Firestore ─────────────────────────────────
-  const handleCommitDraw = async () => {
-    if (!id) return;
+  // ── Step 3 Commit: Save to Firestore ──────────────────────────────────────
+  const handleCommitAll = async () => {
+    if (!id || previewMatches.length === 0) return;
     setProcessing(true);
     try {
       // 1. Save Teams
-      const teamsToSave: Omit<Team, 'id' | 'createdAt' | 'teamStats'>[] = drawnTeams.map((t) => ({
-        name: t.teamName,
-        p1Id: t.p1.id,
-        p2Id: t.p2.id,
-        p1Name: t.p1.name,
-        p2Name: t.p2.name,
-        groupId: null,
-      }));
-      const savedTeams = await saveTeams(id, teamsToSave);
+      const teamsToSave = drawnTeams.map((t, idx) => {
+        // Find which group this team belongs to
+        let assignedGroup = 'A';
+        for (const g of drawnGroups) {
+          if (g.teamIndices.includes(idx)) {
+            assignedGroup = g.name;
+            break;
+          }
+        }
+        return {
+          name: t.teamName,
+          p1Id: t.p1.id,
+          p2Id: t.p2.id,
+          p1Name: t.p1.name,
+          p2Name: t.p2.name,
+          groupId: `group-${assignedGroup}`,
+        };
+      });
+      await saveTeams(id, teamsToSave);
 
       // 2. Save Groups
-      const groupsToSave: Omit<TournamentGroup, 'id'>[] = drawnGroups.map((g) => ({
-        name: g.name,
-        type: tournament.config.participants.genderMode,
-        entityType: 'TEAM',
-        entityIds: g.teamIndices.map((idx) => savedTeams[idx]?.id || String(idx)),
-        maxEntities: Math.ceil(savedTeams.length / drawnGroups.length),
+      const groupsToSave = drawnGroups.map((g) => ({
+        name: `Bảng ${g.name}`,
+        type: genderMode,
+        entityType: 'TEAM' as const,
+        entityIds: g.teamIndices.map((idx) => `temp-team-${idx}`),
+        maxEntities: g.teamIndices.length,
       }));
       await saveGroups(id, groupsToSave);
 
-      // 3. Map preview matches with actual saved Team IDs & save
-      const matchesToSave = previewMatches.map((m) => ({
-        ...m,
-      }));
-      await saveMatches(id, matchesToSave);
+      // 3. Save Matches
+      await saveMatches(id, previewMatches);
 
       // 4. Save Draw Audit Record
       await saveDrawRecord(id, {
         drawType: 'GROUP',
         seed: `${id}-${Date.now()}`,
-        algorithmVersion: '1.0.0',
-        inputHash: `${savedTeams.length}-${drawnGroups.length}`,
+        algorithmVersion: '1.1.0',
+        inputHash: `${participants.length}-${drawnTeams.length}-${drawnGroups.length}`,
         result: {
-          teamsCount: savedTeams.length,
+          teamsCount: drawnTeams.length,
           groupsCount: drawnGroups.length,
-          matchesCount: matchesToSave.length,
+          matchesCount: previewMatches.length,
         },
         validation: { passed: true, errors: [], warnings: [] },
         createdBy: tournament.createdBy || 'editor',
       });
 
-      // 5. Transition tournament status to DRAWN
+      // 5. Update tournament status to DRAWN
       await updateTournamentStatus(id, 'DRAWN');
 
-      alert('Bốc thăm và lập lịch thi đấu thành công!');
+      alert('Đã lưu kết quả bốc thăm, chia bảng và tạo lịch thi đấu thành công!');
       navigate(`/tournaments/${id}`);
-    } catch (err: unknown) {
-      alert((err as Error).message || 'Có lỗi xảy ra khi lưu bốc thăm.');
+    } catch (e: unknown) {
+      alert((e as Error).message ?? 'Lỗi lưu dữ liệu bốc thăm');
     } finally {
       setProcessing(false);
     }
   };
 
   return (
-    <div className="page-container animate-fade-in-up">
+    <div className="page-container space-y-8 animate-fade-in-up">
       {/* Back button */}
       <button
         onClick={() => navigate(`/tournaments/${id}`)}
-        className="flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors mb-6 text-sm"
+        className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs sm:text-sm font-semibold cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
         Quay lại chi tiết giải đấu
       </button>
 
-      {/* Header */}
-      <div className="card mb-6">
+      {/* Top Header Card */}
+      <div className="glass-panel p-6 sm:p-8 space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="w-5 h-5 text-orange-500" />
-              <h1 className="text-2xl font-extrabold text-white tracking-tight">
-                Bốc Thăm & Chia Bảng: {tournament.name}
-              </h1>
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              <span className="badge-blue text-xs font-bold">Fixed Doubles</span>
+              <span className="badge-emerald text-xs font-bold">
+                {GENDER_MODE_LABEL[genderMode]}
+              </span>
+              <span className="badge-orange text-xs font-bold">
+                {numGroups} Bảng • {tournament.config.groups?.maxEntitiesPerGroup || 4} Cặp/Bảng
+              </span>
             </div>
-            <p className="text-slate-400 text-sm">
-              Thể thức Cặp Cố Định (Fixed Doubles) · {participants.length} VĐV đã đăng ký
-            </p>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight font-display">
+              Bốc Thăm & Chia Bảng: {tournament.name}
+            </h1>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="badge badge-orange font-semibold">
-              Bước {step}/3: {step === 1 ? 'Ghép Cặp' : step === 2 ? 'Chia Bảng' : 'Xác Nhận Lịch'}
-            </span>
-          </div>
+        </div>
+
+        {/* Step Indicator */}
+        <div className="grid grid-cols-3 gap-3 pt-2">
+          <button
+            onClick={() => setStep(1)}
+            className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+              step === 1
+                ? 'bg-orange-500/10 border-orange-500 text-orange-400 shadow-md shadow-orange-950/50'
+                : 'bg-white/[0.02] border-white/[0.06] text-slate-400'
+            }`}
+          >
+            <div className="text-[11px] font-bold uppercase tracking-wider">Bước 1</div>
+            <div className="text-sm font-bold text-white flex items-center gap-1.5 mt-0.5">
+              <Shuffle className="w-4 h-4 text-orange-400" />
+              Bốc Thăm Cặp Đôi
+            </div>
+          </button>
+
+          <button
+            onClick={() => {
+              if (drawnTeams.length > 0) setStep(2);
+            }}
+            disabled={drawnTeams.length === 0}
+            className={`p-3 rounded-2xl border text-left transition-all ${
+              drawnTeams.length === 0 ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+            } ${
+              step === 2
+                ? 'bg-orange-500/10 border-orange-500 text-orange-400 shadow-md shadow-orange-950/50'
+                : 'bg-white/[0.02] border-white/[0.06] text-slate-400'
+            }`}
+          >
+            <div className="text-[11px] font-bold uppercase tracking-wider">Bước 2</div>
+            <div className="text-sm font-bold text-white flex items-center gap-1.5 mt-0.5">
+              <Layers className="w-4 h-4 text-blue-400" />
+              Bốc Thăm Chia Bảng
+            </div>
+          </button>
+
+          <button
+            onClick={() => {
+              if (drawnGroups.length > 0) setStep(3);
+            }}
+            disabled={drawnGroups.length === 0}
+            className={`p-3 rounded-2xl border text-left transition-all ${
+              drawnGroups.length === 0 ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+            } ${
+              step === 3
+                ? 'bg-orange-500/10 border-orange-500 text-orange-400 shadow-md shadow-orange-950/50'
+                : 'bg-white/[0.02] border-white/[0.06] text-slate-400'
+            }`}
+          >
+            <div className="text-[11px] font-bold uppercase tracking-wider">Bước 3</div>
+            <div className="text-sm font-bold text-white flex items-center gap-1.5 mt-0.5">
+              <Calendar className="w-4 h-4 text-emerald-400" />
+              Xem Lịch & Xác Nhận
+            </div>
+          </button>
         </div>
       </div>
 
-      {/* STEP 1: Ghép Cặp Đôi */}
+      {/* ── STEP 1: Pair Draw ──────────────────────────────────────────────── */}
       {step === 1 && (
-        <div className="space-y-6">
-          <div className="card">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-5">
-              <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Shuffle className="w-5 h-5 text-orange-400" />
-                  1. Bốc Thăm Ghép Cặp Đôi
-                </h2>
-                <p className="text-slate-400 text-sm mt-1">
-                  Thuật toán LCG Seeded Shuffle tự động xáo trộn và tạo cặp đôi ngẫu nhiên minh bạch.
-                </p>
-              </div>
-              <button
-                onClick={handleDrawTeams}
-                disabled={participants.length < 2 || participants.length % 2 !== 0}
-                className="btn-primary flex items-center gap-2 text-sm shrink-0"
-              >
-                <Shuffle className="w-4 h-4" />
-                {drawnTeams.length > 0 ? 'Bốc Thăm Lại' : 'Bắt Đầu Bốc Thăm Cặp'}
-              </button>
+        <div className="glass-panel p-6 sm:p-8 space-y-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Shuffle className="w-5 h-5 text-orange-400" />
+                Ghép Cặp Vận Động Viên ({participants.length} VĐV tham gia)
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Nội dung: <strong className="text-emerald-400">{GENDER_MODE_LABEL[genderMode]}</strong> •{' '}
+                {genderMode === 'MIXED'
+                  ? 'Thuật toán sẽ ghép 1 Nam + 1 Nữ thành 1 cặp đấu.'
+                  : 'Bốc thăm ngẫu nhiên ghép 2 VĐV thành 1 cặp đấu cố định.'}
+              </p>
             </div>
 
-            {participants.length % 2 !== 0 && (
-              <div className="p-3 bg-red-950/40 border border-red-800/60 rounded-lg text-red-400 text-xs flex items-center gap-2 mb-4">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>Số lượng VĐV đang là số lẻ ({participants.length}). Cần thêm 1 VĐV để ghép đủ cặp.</span>
-              </div>
-            )}
+            <button
+              onClick={handleDrawTeams}
+              className="btn-primary px-5 py-2.5 text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer shadow-lg shadow-orange-950/40"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Bốc Thăm Ghép Cặp</span>
+            </button>
+          </div>
 
-            {drawnTeams.length === 0 ? (
-              <div className="border border-dashed border-slate-800 rounded-xl p-10 text-center">
-                <Users className="w-10 h-10 text-slate-700 mx-auto mb-3" />
-                <p className="text-slate-400 font-medium">Chưa có kết quả bốc thăm cặp</p>
-                <p className="text-slate-500 text-xs mt-1">Nhấn "Bắt Đầu Bốc Thăm Cặp" để tạo ngẫu nhiên</p>
-              </div>
-            ) : (
-              <div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                  {drawnTeams.map((team, idx) => (
-                    <div key={idx} className="p-4 bg-slate-900/60 border border-slate-800 rounded-xl flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-orange-500/20 text-orange-400 font-bold text-xs flex items-center justify-center shrink-0">
+          {drawnTeams.length === 0 ? (
+            <div className="text-center py-12 border border-dashed border-white/10 rounded-2xl space-y-2">
+              <Shuffle className="w-10 h-10 text-slate-600 mx-auto" />
+              <p className="text-sm text-slate-300 font-semibold">Chưa có kết quả bốc thăm cặp đôi</p>
+              <p className="text-xs text-slate-500">
+                Nhấn nút &quot;Bốc Thăm Ghép Cặp&quot; để tự động tạo danh sách cặp đấu
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {drawnTeams.map((team, idx) => (
+                  <div
+                    key={idx}
+                    className="glass-card p-4 flex items-center justify-between border-white/[0.08] hover:border-orange-500/30 transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="w-7 h-7 rounded-lg bg-orange-500/20 text-orange-400 font-bold text-xs flex items-center justify-center font-score">
                         {idx + 1}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold text-white truncate">{team.teamName}</p>
-                        <p className="text-xs text-slate-400">
+                      </span>
+                      <div>
+                        <div className="text-sm font-bold text-white leading-tight">
+                          {team.teamName}
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
                           {team.p1.name} & {team.p2.name}
-                        </p>
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                <div className="flex justify-end pt-4 border-t border-slate-800">
-                  <button
-                    onClick={() => setStep(2)}
-                    className="btn-primary flex items-center gap-2 text-sm"
-                  >
-                    Tiếp Tục: Chia Bảng →
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* STEP 2: Chia Bảng Đấu */}
-      {step === 2 && (
-        <div className="space-y-6">
-          <div className="card">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-5">
-              <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Layers className="w-5 h-5 text-orange-400" />
-                  2. Cấu Hình & Bốc Thăm Chia Bảng
-                </h2>
-                <p className="text-slate-400 text-sm mt-1">
-                  Đã ghép được {drawnTeams.length} cặp đấu. Thiết lập số lượng bảng và thực hiện chia bảng.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 p-4 bg-slate-900/40 rounded-xl border border-slate-800">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                  Số lượng bảng đấu
-                </label>
-                <select
-                  value={numGroups}
-                  onChange={(e) => setNumGroups(Number(e.target.value))}
-                  className="input-base w-full"
-                >
-                  <option value={1}>1 Bảng (Vòng tròn 1 lượt)</option>
-                  <option value={2}>2 Bảng (Bảng A, B)</option>
-                  <option value={4}>4 Bảng (Bảng A, B, C, D)</option>
-                </select>
+                  </div>
+                ))}
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                  Chế độ phân bổ
-                </label>
-                <select
-                  value={groupDrawMode}
-                  onChange={(e) => setGroupDrawMode(e.target.value as 'RANDOM' | 'SEEDED')}
-                  className="input-base w-full"
-                >
-                  <option value="RANDOM">Ngẫu Nhiên (Random Shuffle)</option>
-                  <option value="SEEDED">Theo Thứ Tự Hạt Giống (Seeded)</option>
-                </select>
-              </div>
-
-              <div className="flex items-end">
+              <div className="flex justify-end pt-4 border-t border-white/[0.08]">
                 <button
-                  onClick={handleDrawGroups}
-                  className="btn-primary w-full flex items-center justify-center gap-2 text-sm"
+                  onClick={() => setStep(2)}
+                  className="btn-primary px-6 py-2.5 text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer"
                 >
-                  <Shuffle className="w-4 h-4" />
-                  Bốc Thăm Chia Bảng
+                  <span>Chuyển Sang Bước 2: Bốc Thăm Chia Bảng</span>
+                  <span>→</span>
                 </button>
               </div>
             </div>
-
-            <div className="flex justify-between pt-4 border-t border-slate-800">
-              <button onClick={() => setStep(1)} className="btn-secondary text-sm">
-                ← Quay lại ghép cặp
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
-      {/* STEP 3: Xác Nhận & Xem Trước Lịch Thi Đấu */}
-      {step === 3 && (
-        <div className="space-y-6">
-          <div className="card">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-5">
-              <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                  3. Xem Trước Bảng Đấu & Lịch Trận
-                </h2>
-                <p className="text-slate-400 text-sm mt-1">
-                  Đã tạo {drawnGroups.length} bảng đấu với tổng cộng {previewMatches.length} trận đấu vòng bảng.
-                </p>
-              </div>
-              <button
-                onClick={handleCommitDraw}
-                disabled={processing}
-                className="btn-primary flex items-center gap-2 text-sm shrink-0"
-              >
-                {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                Xác Nhận & Khởi Tạo Giải
-              </button>
+      {/* ── STEP 2: Group Draw ─────────────────────────────────────────────── */}
+      {step === 2 && (
+        <div className="glass-panel p-6 sm:p-8 space-y-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Layers className="w-5 h-5 text-blue-400" />
+                Bốc Thăm Phân Bổ Vào Bảng Đấu ({drawnTeams.length} cặp đấu)
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Cấu hình phân bổ vào {numGroups} bảng đấu (Bảng A, B, C...)
+              </p>
             </div>
 
-            {/* Groups Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
-              {drawnGroups.map((grp) => (
-                <div key={grp.name} className="p-4 bg-slate-900/70 border border-slate-800 rounded-xl space-y-3">
-                  <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                    <h3 className="font-bold text-white text-base">Bảng {grp.name}</h3>
-                    <span className="text-xs text-slate-400">{grp.teamIndices.length} đội</span>
+            <div className="flex items-center gap-3">
+              <select
+                value={numGroups}
+                onChange={(e) => setNumGroups(parseInt(e.target.value) || 2)}
+                className="input-base text-xs py-2 w-32"
+              >
+                <option value={1}>1 Bảng</option>
+                <option value={2}>2 Bảng</option>
+                <option value={3}>3 Bảng</option>
+                <option value={4}>4 Bảng</option>
+                <option value={6}>6 Bảng</option>
+                <option value={8}>8 Bảng</option>
+              </select>
+
+              <button
+                onClick={handleDrawGroups}
+                className="btn-primary px-5 py-2.5 text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer shadow-lg shadow-orange-950/40"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Bốc Thăm Bảng Đấu</span>
+              </button>
+            </div>
+          </div>
+
+          {drawnGroups.length === 0 ? (
+            <div className="text-center py-12 border border-dashed border-white/10 rounded-2xl space-y-2">
+              <Layers className="w-10 h-10 text-slate-600 mx-auto" />
+              <p className="text-sm text-slate-300 font-semibold">Chưa có kết quả chia bảng</p>
+              <p className="text-xs text-slate-500">
+                Chọn số bảng và nhấn &quot;Bốc Thăm Bảng Đấu&quot; để phân bổ các cặp vào bảng
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {drawnGroups.map((g) => (
+                  <div key={g.name} className="glass-card p-5 space-y-3 border-blue-500/20">
+                    <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+                      <h3 className="text-base font-bold text-white flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg bg-blue-500/20 text-blue-400 font-bold text-xs flex items-center justify-center">
+                          {g.name}
+                        </span>
+                        <span>Bảng {g.name}</span>
+                      </h3>
+                      <span className="text-xs text-slate-400 font-semibold">
+                        {g.teamIndices.length} cặp đấu
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {g.teamIndices.map((idx, pos) => {
+                        const t = drawnTeams[idx];
+                        return (
+                          <div
+                            key={idx}
+                            className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.04] flex items-center gap-2 text-xs"
+                          >
+                            <span className="text-slate-500 font-score font-bold w-4">
+                              {pos + 1}.
+                            </span>
+                            <span className="font-bold text-white line-clamp-1">{t.teamName}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    {grp.teamIndices.map((idx, pos) => {
-                      const t = drawnTeams[idx];
-                      return (
-                        <div key={idx} className="flex items-center gap-2 text-sm p-2 rounded bg-slate-950/40">
-                          <span className="w-5 text-slate-500 font-bold text-xs">{pos + 1}.</span>
-                          <span className="font-medium text-slate-200">{t?.teamName}</span>
-                        </div>
-                      );
-                    })}
+                ))}
+              </div>
+
+              <div className="flex justify-between items-center pt-4 border-t border-white/[0.08]">
+                <button
+                  onClick={() => setStep(1)}
+                  className="btn-secondary text-xs px-4 py-2.5 cursor-pointer"
+                >
+                  ← Quay lại Bước 1
+                </button>
+                <button
+                  onClick={handleGeneratePreview}
+                  className="btn-primary px-6 py-2.5 text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer"
+                >
+                  <span>Chuyển Sang Bước 3: Xem Lịch & Xác Nhận</span>
+                  <span>→</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── STEP 3: Fixtures & Confirmation ───────────────────────────────── */}
+      {step === 3 && (
+        <div className="glass-panel p-6 sm:p-8 space-y-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-emerald-400" />
+                Lịch Thi Đấu Dự Kiến ({previewMatches.length} trận vòng bảng)
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Các trận đấu vòng bảng được sắp xếp tự động theo sân và lượt đấu
+              </p>
+            </div>
+
+            <button
+              onClick={handleCommitAll}
+              disabled={processing}
+              className="btn-primary px-6 py-2.5 text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-950/50 cursor-pointer"
+            >
+              {processing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Đang Lưu Dữ Liệu...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Xác Nhận & Lưu Lịch Thi Đấu</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+            {previewMatches.map((m, idx) => (
+              <div
+                key={idx}
+                className="glass-card p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-xl bg-white/[0.05] text-slate-400 font-bold flex items-center justify-center font-score">
+                    #{m.order}
+                  </span>
+                  <div>
+                    <div className="text-slate-400 text-[11px]">
+                      Vòng {m.round} • {m.groupId ? `Bảng ${m.groupId.replace('group-', '')}` : 'Toàn giải'} •{' '}
+                      <span className="text-orange-400 font-semibold">{m.courtId}</span>
+                    </div>
+                    <div className="text-sm font-bold text-white mt-0.5">
+                      <span className="text-orange-400">{m.team1.p1Name} / {m.team1.p2Name}</span>
+                      <span className="text-slate-500 mx-2">VS</span>
+                      <span className="text-blue-400">{m.team2.p1Name} / {m.team2.p2Name}</span>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-
-            {/* Matches Schedule Preview */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-orange-400" />
-                Lịch thi đấu vòng bảng ({previewMatches.length} trận)
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-800 bg-slate-900/50 text-slate-400 text-xs">
-                      <th className="text-left px-3 py-2">Trận</th>
-                      <th className="text-left px-3 py-2">Bảng</th>
-                      <th className="text-left px-3 py-2">Vòng</th>
-                      <th className="text-left px-3 py-2">Sân</th>
-                      <th className="text-left px-3 py-2">Đội 1</th>
-                      <th className="text-center px-3 py-2">VS</th>
-                      <th className="text-left px-3 py-2">Đội 2</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {previewMatches.map((m) => (
-                      <tr key={m.order} className="border-b border-slate-800/40 hover:bg-slate-800/20">
-                        <td className="px-3 py-2.5 font-bold text-orange-400">#{m.order}</td>
-                        <td className="px-3 py-2.5 text-slate-300 font-medium">Bảng {m.groupId}</td>
-                        <td className="px-3 py-2.5 text-slate-400">Vòng {m.round}</td>
-                        <td className="px-3 py-2.5 text-slate-400">{m.courtId}</td>
-                        <td className="px-3 py-2.5 font-medium text-white">
-                          {m.team1.p1Name} / {m.team1.p2Name}
-                        </td>
-                        <td className="px-3 py-2.5 text-center text-slate-500 font-bold">vs</td>
-                        <td className="px-3 py-2.5 font-medium text-white">
-                          {m.team2.p1Name} / {m.team2.p2Name}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
-            </div>
+            ))}
+          </div>
 
-            <div className="flex justify-between pt-6 border-t border-slate-800">
-              <button onClick={() => setStep(2)} className="btn-secondary text-sm">
-                ← Quay lại cấu hình bảng
-              </button>
-            </div>
+          <div className="flex justify-between items-center pt-4 border-t border-white/[0.08]">
+            <button
+              onClick={() => setStep(2)}
+              className="btn-secondary text-xs px-4 py-2.5 cursor-pointer"
+            >
+              ← Quay lại Bước 2
+            </button>
+            <button
+              onClick={handleCommitAll}
+              disabled={processing}
+              className="btn-primary px-6 py-2.5 text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer shadow-lg shadow-orange-950/50"
+            >
+              {processing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Đang Lưu Dữ Liệu...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Xác Nhận & Lưu Lịch Thi Đấu</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       )}

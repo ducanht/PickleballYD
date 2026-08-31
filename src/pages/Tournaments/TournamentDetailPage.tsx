@@ -6,23 +6,22 @@ import {
   updateTournamentConfig,
 } from '../../features/tournaments/tournamentService';
 import { useIsEditor, useIsAdmin } from '../../contexts/AuthContext';
-import type { Tournament, Participant, TournamentConfig } from '../../types';
+import type { Tournament, Participant, TournamentConfig, GenderMode, AssignmentMode, MatchFormat } from '../../types';
 import {
   ArrowLeft,
   Trophy,
   Users,
   Settings,
   Calendar,
-  QrCode,
   Loader2,
   Activity,
-  GitPullRequest,
-  ListOrdered,
+  Layers,
   Save,
   CheckCircle2,
   MapPin,
   Flame,
   Award,
+  Sparkles,
 } from 'lucide-react';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -38,6 +37,12 @@ const STATUS_LABEL: Record<string, string> = {
 const FORMAT_LABEL: Record<string, string> = {
   FIXED_DOUBLES: 'Cặp Cố Định (Fixed Doubles)',
   ROTATING_DOUBLES: 'Cặp Xoay Vòng (Rotating Doubles)',
+};
+
+const GENDER_MODE_LABEL: Record<GenderMode, string> = {
+  MALE: 'Đôi Nam',
+  FEMALE: 'Đôi Nữ',
+  MIXED: 'Đôi Nam Nữ / Hỗn Hợp',
 };
 
 function formatDate(d: unknown): string {
@@ -140,6 +145,11 @@ export default function TournamentDetailPage() {
               <span className="badge-blue text-xs font-bold">
                 {FORMAT_LABEL[tournament.config.format] ?? tournament.config.format}
               </span>
+              {tournament.config.participants?.genderMode && (
+                <span className="badge-emerald text-xs font-bold">
+                  {GENDER_MODE_LABEL[tournament.config.participants.genderMode]}
+                </span>
+              )}
             </div>
 
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight font-display">
@@ -148,146 +158,95 @@ export default function TournamentDetailPage() {
 
             <p className="text-xs sm:text-sm text-slate-400 flex flex-wrap items-center gap-4">
               <span className="flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-slate-500" />
+                Khởi tranh: {formatDate(tournament.startDate)}
+              </span>
+              <span className="flex items-center gap-1.5">
                 <MapPin className="w-4 h-4 text-orange-400" />
                 Sân Pickleball Trung Tâm Yên Định
               </span>
-              <span>•</span>
               <span className="flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-slate-500" />
-                {formatDate(tournament.startDate)}
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1.5">
-                <Settings className="w-4 h-4 text-slate-500" />
-                {tournament.config.scheduling.courts} Sân thi đấu
+                <Layers className="w-4 h-4 text-blue-400" />
+                {tournament.config.groups?.numberOfGroups || 1} Bảng đấu • {tournament.config.participants?.maxPlayers || 16} VĐV
               </span>
             </p>
           </div>
 
-          {/* Action Hub Buttons */}
+          {/* Action Hub */}
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
             <Link
-              to={`/tournaments/${id}/live`}
-              className="btn-primary flex-1 lg:flex-none justify-center px-4 py-2.5 text-xs sm:text-sm font-bold gap-2 shadow-lg shadow-orange-950/60"
+              to={`/tournaments/${tournament.id}/live`}
+              className="btn-primary px-4 py-2.5 text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-lg shadow-orange-950/40"
             >
-              <Activity className="w-4 h-4 animate-pulse" />
-              Live Kiosk
+              <Activity className="w-4 h-4" />
+              Live Board
             </Link>
 
-            <Link
-              to={`/tournaments/${id}/standings`}
-              className="btn-secondary flex-1 lg:flex-none justify-center px-4 py-2.5 text-xs sm:text-sm font-semibold gap-1.5"
-            >
-              <ListOrdered className="w-4 h-4" />
-              Bảng Điểm
-            </Link>
-
-            <Link
-              to={`/tournaments/${id}/schedule`}
-              className="btn-secondary flex-1 lg:flex-none justify-center px-4 py-2.5 text-xs sm:text-sm font-semibold gap-1.5"
-            >
-              <Calendar className="w-4 h-4" />
-              Lịch Đấu
-            </Link>
-
-            {canEdit && (
-              <Link
-                to={`/tournaments/${id}/draw`}
-                className="btn-secondary flex-1 lg:flex-none justify-center px-4 py-2.5 text-xs sm:text-sm font-semibold gap-1.5 border-orange-500/40 text-orange-300"
-              >
-                <GitPullRequest className="w-4 h-4" />
-                Bốc Thăm
-              </Link>
+            {isEditor && (
+              <>
+                <Link
+                  to={`/tournaments/${tournament.id}/draw`}
+                  className="btn-secondary px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5"
+                >
+                  <Trophy className="w-4 h-4 text-orange-400" />
+                  Bốc Thăm / Chia Bảng
+                </Link>
+                <Link
+                  to={`/tournaments/${tournament.id}/schedule`}
+                  className="btn-secondary px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5"
+                >
+                  <Calendar className="w-4 h-4 text-blue-400" />
+                  Lịch Thi Đấu
+                </Link>
+                <Link
+                  to={`/tournaments/${tournament.id}/knockout`}
+                  className="btn-secondary px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5"
+                >
+                  <Award className="w-4 h-4 text-amber-400" />
+                  Vòng Knockout
+                </Link>
+              </>
             )}
           </div>
         </div>
 
-        {/* Quick Nav Chips */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-          <Link
-            to={`/tournaments/${id}/schedule`}
-            className="glass-card p-3 rounded-xl flex items-center justify-between hover:border-orange-500/40 transition-colors"
-          >
-            <div className="flex items-center gap-2.5">
-              <Calendar className="w-4 h-4 text-orange-400" />
-              <span className="text-xs font-bold text-white">Lịch Thi Đấu</span>
-            </div>
-            <span className="text-[11px] text-slate-400">Xem →</span>
-          </Link>
-
-          <Link
-            to={`/tournaments/${id}/standings`}
-            className="glass-card p-3 rounded-xl flex items-center justify-between hover:border-blue-500/40 transition-colors"
-          >
-            <div className="flex items-center gap-2.5">
-              <ListOrdered className="w-4 h-4 text-blue-400" />
-              <span className="text-xs font-bold text-white">Bảng Xếp Hạng</span>
-            </div>
-            <span className="text-[11px] text-slate-400">Xem →</span>
-          </Link>
-
-          <Link
-            to={`/tournaments/${id}/knockout`}
-            className="glass-card p-3 rounded-xl flex items-center justify-between hover:border-emerald-500/40 transition-colors"
-          >
-            <div className="flex items-center gap-2.5">
-              <Award className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-bold text-white">Nhánh Knockout</span>
-            </div>
-            <span className="text-[11px] text-slate-400">Xem →</span>
-          </Link>
-
-          <Link
-            to={`/tournaments/${id}/live`}
-            className="glass-card p-3 rounded-xl flex items-center justify-between hover:border-amber-500/40 transition-colors"
-          >
-            <div className="flex items-center gap-2.5">
-              <QrCode className="w-4 h-4 text-amber-400" />
-              <span className="text-xs font-bold text-white">QR / Màn Hình Sân</span>
-            </div>
-            <span className="text-[11px] text-slate-400">Mở →</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* Detail Tabs */}
-      <div className="space-y-6">
-        <div className="flex items-center gap-2 border-b border-white/[0.08] pb-1">
+        {/* Tab Navigation */}
+        <div className="flex items-center gap-2 border-b border-white/[0.06] pb-1">
           <button
             onClick={() => setTab('info')}
-            className={`px-4 py-2 text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
+            className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer ${
               tab === 'info'
-                ? 'border-orange-500 text-orange-400'
-                : 'border-transparent text-slate-400 hover:text-white'
+                ? 'bg-orange-500 text-white shadow-md shadow-orange-950/40'
+                : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
             }`}
           >
             Tổng Quan Giải Đấu
           </button>
           <button
             onClick={() => setTab('participants')}
-            className={`px-4 py-2 text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
+            className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer ${
               tab === 'participants'
-                ? 'border-orange-500 text-orange-400'
-                : 'border-transparent text-slate-400 hover:text-white'
+                ? 'bg-orange-500 text-white shadow-md shadow-orange-950/40'
+                : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
             }`}
           >
-            Danh Sách VĐV ({participants.length})
+            Vận Động Viên ({participants.length})
           </button>
           {canEdit && (
             <button
               onClick={() => setTab('config')}
-              className={`px-4 py-2 text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
+              className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer ${
                 tab === 'config'
-                  ? 'border-orange-500 text-orange-400'
-                  : 'border-transparent text-slate-400 hover:text-white'
+                  ? 'bg-orange-500 text-white shadow-md shadow-orange-950/40'
+                  : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
               }`}
             >
-              Cấu Hình Giải
+              Cấu Hình Chuyên Sâu
             </button>
           )}
         </div>
 
-        {/* Tab 1: Info */}
+        {/* ── Tab 1: Info ──────────────────────────────────────────────── */}
         {tab === 'info' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="glass-card p-6 space-y-4">
@@ -298,11 +257,17 @@ export default function TournamentDetailPage() {
               <div className="space-y-2.5 text-xs sm:text-sm divide-y divide-white/[0.06]">
                 <div className="flex justify-between py-2">
                   <span className="text-slate-400">Tên giải đấu:</span>
-                  <span className="font-bold text-white">{tournament.name}</span>
+                  <span className="font-bold text-white text-right">{tournament.name}</span>
                 </div>
                 <div className="flex justify-between py-2">
                   <span className="text-slate-400">Thể thức:</span>
                   <span className="font-bold text-orange-400">{FORMAT_LABEL[tournament.config.format]}</span>
+                </div>
+                <div className="flex justify-between py-2">
+                  <span className="text-slate-400">Nội dung thi đấu:</span>
+                  <span className="font-bold text-emerald-400">
+                    {GENDER_MODE_LABEL[tournament.config.participants?.genderMode || 'MIXED']}
+                  </span>
                 </div>
                 <div className="flex justify-between py-2">
                   <span className="text-slate-400">Ngày khai mạc:</span>
@@ -324,37 +289,48 @@ export default function TournamentDetailPage() {
             <div className="glass-card p-6 space-y-4">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                 <Settings className="w-4 h-4 text-blue-400" />
-                Quy Chuẩn Thi Đấu
+                Cấu Hình Bảng Đấu & Thi Đấu
               </h3>
               <div className="space-y-2.5 text-xs sm:text-sm divide-y divide-white/[0.06]">
                 <div className="flex justify-between py-2">
-                  <span className="text-slate-400">Số sân sử dụng:</span>
-                  <span className="font-bold text-white">{tournament.config.scheduling.courts} Sân</span>
+                  <span className="text-slate-400">Số lượng bảng đấu:</span>
+                  <span className="font-bold text-white">{tournament.config.groups?.numberOfGroups || 1} Bảng</span>
                 </div>
                 <div className="flex justify-between py-2">
-                  <span className="text-slate-400">Vận động viên tối đa:</span>
-                  <span className="font-bold text-white">{tournament.config.participants.maxPlayers} VĐV</span>
+                  <span className="text-slate-400">Số cặp/VĐV mỗi bảng:</span>
+                  <span className="font-bold text-white">
+                    {tournament.config.groups?.maxEntitiesPerGroup || 4}{' '}
+                    {tournament.config.format === 'FIXED_DOUBLES' ? 'cặp đấu' : 'VĐV'}
+                  </span>
+                </div>
+                <div className="flex justify-between py-2">
+                  <span className="text-slate-400">Tổng VĐV tối đa:</span>
+                  <span className="font-bold text-white">{tournament.config.participants?.maxPlayers || 16} VĐV</span>
+                </div>
+                <div className="flex justify-between py-2">
+                  <span className="text-slate-400">Số sân sử dụng:</span>
+                  <span className="font-bold text-white">{tournament.config.scheduling?.courts || 2} Sân</span>
                 </div>
                 <div className="flex justify-between py-2">
                   <span className="text-slate-400">Điểm thắng trận:</span>
-                  <span className="font-bold text-emerald-400">{tournament.config.scoring.pointsToWin} Điểm (Cách biệt 2đ)</span>
+                  <span className="font-bold text-emerald-400">
+                    {tournament.config.scoring?.pointsToWin || 11} Điểm (Cách biệt 2đ)
+                  </span>
                 </div>
                 <div className="flex justify-between py-2">
                   <span className="text-slate-400">Vòng Knockout Play-off:</span>
                   <span className="font-bold text-white">
-                    {tournament.config.knockout.enabled ? 'Bật (Lấy 2 đội đầu bảng)' : 'Tắt'}
+                    {tournament.config.knockout?.enabled
+                      ? `Bật (Lấy ${tournament.config.knockout?.qualifiersPerGroup || 2} đội/bảng)`
+                      : 'Tắt'}
                   </span>
-                </div>
-                <div className="flex justify-between py-2">
-                  <span className="text-slate-400">Thời gian nghỉ giữa trận:</span>
-                  <span className="font-bold text-white">{tournament.config.scheduling.restBetweenMatches} phút</span>
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Tab 2: Participants */}
+        {/* ── Tab 2: Participants ──────────────────────────────────────── */}
         {tab === 'participants' && (
           <div className="glass-panel p-6 space-y-4">
             <div className="flex justify-between items-center">
@@ -382,6 +358,7 @@ export default function TournamentDetailPage() {
                     <tr>
                       <th className="py-3 px-4">#</th>
                       <th className="py-3 px-4">Họ và Tên</th>
+                      <th className="py-3 px-4">Giới tính</th>
                       <th className="py-3 px-4">Trường THPT</th>
                       <th className="py-3 px-4">Trạng Thái</th>
                     </tr>
@@ -391,6 +368,9 @@ export default function TournamentDetailPage() {
                       <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
                         <td className="py-3 px-4 text-slate-500 font-score">{idx + 1}</td>
                         <td className="py-3 px-4 font-bold text-white">{p.name}</td>
+                        <td className="py-3 px-4 text-slate-300">
+                          {p.gender === 'FEMALE' ? 'Nữ' : 'Nam'}
+                        </td>
                         <td className="py-3 px-4 text-slate-400">{p.school}</td>
                         <td className="py-3 px-4">
                           <span className="badge-emerald text-[11px] font-bold">
@@ -406,110 +386,234 @@ export default function TournamentDetailPage() {
           </div>
         )}
 
-        {/* Tab 3: Config */}
+        {/* ── Tab 3: Detailed Config Form ───────────────────────────────── */}
         {tab === 'config' && configForm && (
-          <div className="glass-panel p-6 sm:p-8 max-w-2xl space-y-6">
+          <div className="glass-panel p-6 sm:p-8 space-y-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <Settings className="w-5 h-5 text-orange-500" />
-              Chỉnh Sửa Cấu Hình Giải Đấu
+              Chỉnh Sửa Cấu Hình Giải Đấu Chi Tiết
             </h3>
 
-            <form onSubmit={handleSaveConfig} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Số Sân Thi Đấu
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={configForm.scheduling.courts}
-                    onChange={(e) =>
-                      setConfigForm({
-                        ...configForm,
-                        scheduling: {
-                          ...configForm.scheduling,
-                          courts: parseInt(e.target.value) || 2,
-                        },
-                      })
-                    }
-                    className="input-base"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Số VĐV Tối Đa
-                  </label>
-                  <input
-                    type="number"
-                    min={4}
-                    max={64}
-                    value={configForm.participants.maxPlayers}
-                    onChange={(e) =>
-                      setConfigForm({
-                        ...configForm,
-                        participants: {
-                          ...configForm.participants,
-                          maxPlayers: parseInt(e.target.value) || 16,
-                        },
-                      })
-                    }
-                    className="input-base"
-                  />
+            <form onSubmit={handleSaveConfig} className="space-y-6">
+              {/* Groups & Category */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  1. Bảng Đấu & Nội Dung Thi Đấu
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1.5">Nội Dung Thi Đấu</label>
+                    <select
+                      value={configForm.participants?.genderMode || 'MIXED'}
+                      onChange={(e) =>
+                        setConfigForm({
+                          ...configForm,
+                          participants: {
+                            ...configForm.participants,
+                            genderMode: e.target.value as GenderMode,
+                          },
+                        })
+                      }
+                      className="input-base text-xs"
+                    >
+                      <option value="MIXED">Đôi Nam Nữ / Hỗn Hợp</option>
+                      <option value="MALE">Đôi Nam (Men's)</option>
+                      <option value="FEMALE">Đôi Nữ (Women's)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1.5">Số Lượng Bảng Đấu</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={8}
+                      value={configForm.groups?.numberOfGroups || 1}
+                      onChange={(e) =>
+                        setConfigForm({
+                          ...configForm,
+                          groups: {
+                            ...configForm.groups,
+                            numberOfGroups: parseInt(e.target.value) || 1,
+                          },
+                        })
+                      }
+                      className="input-base text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1.5">
+                      {configForm.format === 'FIXED_DOUBLES' ? 'Số Cặp Mỗi Bảng' : 'Số VĐV Mỗi Bảng'}
+                    </label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={32}
+                      value={configForm.groups?.maxEntitiesPerGroup || 4}
+                      onChange={(e) =>
+                        setConfigForm({
+                          ...configForm,
+                          groups: {
+                            ...configForm.groups,
+                            maxEntitiesPerGroup: parseInt(e.target.value) || 4,
+                          },
+                        })
+                      }
+                      className="input-base text-xs"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Điểm Thắng Trận
-                  </label>
-                  <input
-                    type="number"
-                    min={7}
-                    max={21}
-                    value={configForm.scoring.pointsToWin}
-                    onChange={(e) =>
-                      setConfigForm({
-                        ...configForm,
-                        scoring: {
-                          ...configForm.scoring,
-                          pointsToWin: parseInt(e.target.value) || 11,
-                        },
-                      })
-                    }
-                    className="input-base"
-                  />
+              {/* Match Scoring & Courts */}
+              <div className="space-y-4 pt-4 border-t border-white/[0.06]">
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  2. Sân Đấu & Quy Chuẩn Điểm
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1.5">Số Sân Sử Dụng</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={configForm.scheduling?.courts || 2}
+                      onChange={(e) =>
+                        setConfigForm({
+                          ...configForm,
+                          scheduling: {
+                            ...configForm.scheduling,
+                            courts: parseInt(e.target.value) || 2,
+                          },
+                        })
+                      }
+                      className="input-base text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1.5">Thể Thức Trận</label>
+                    <select
+                      value={configForm.scoring?.matchFormat || 'SINGLE_GAME'}
+                      onChange={(e) =>
+                        setConfigForm({
+                          ...configForm,
+                          scoring: {
+                            ...configForm.scoring,
+                            matchFormat: e.target.value as MatchFormat,
+                          },
+                        })
+                      }
+                      className="input-base text-xs"
+                    >
+                      <option value="SINGLE_GAME">1 Set</option>
+                      <option value="BEST_OF_3">BO3 (3 Sets)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1.5">Điểm Thắng Trận</label>
+                    <input
+                      type="number"
+                      min={7}
+                      max={25}
+                      value={configForm.scoring?.pointsToWin || 11}
+                      onChange={(e) =>
+                        setConfigForm({
+                          ...configForm,
+                          scoring: {
+                            ...configForm.scoring,
+                            pointsToWin: parseInt(e.target.value) || 11,
+                          },
+                        })
+                      }
+                      className="input-base text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1.5">Thời Gian Nghỉ (Phút)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={30}
+                      value={configForm.scheduling?.restBetweenMatches || 5}
+                      onChange={(e) =>
+                        setConfigForm({
+                          ...configForm,
+                          scheduling: {
+                            ...configForm.scheduling,
+                            restBetweenMatches: parseInt(e.target.value) || 5,
+                          },
+                        })
+                      }
+                      className="input-base text-xs"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Thời Gian Nghỉ (Phút)
+              </div>
+
+              {/* Knockout Play-off */}
+              <div className="space-y-4 pt-4 border-t border-white/[0.06]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                      3. Vòng Knockout Play-off
+                    </h4>
+                    <p className="text-[11px] text-slate-400">
+                      Tự động chuyển các đội đầu bảng vào thi đấu nhánh loại trực tiếp.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={configForm.knockout?.enabled ?? true}
+                      onChange={(e) =>
+                        setConfigForm({
+                          ...configForm,
+                          knockout: {
+                            ...configForm.knockout,
+                            enabled: e.target.checked,
+                          },
+                        })
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
                   </label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={30}
-                    value={configForm.scheduling.restBetweenMatches}
-                    onChange={(e) =>
-                      setConfigForm({
-                        ...configForm,
-                        scheduling: {
-                          ...configForm.scheduling,
-                          restBetweenMatches: parseInt(e.target.value) || 5,
-                        },
-                      })
-                    }
-                    className="input-base"
-                  />
                 </div>
+
+                {configForm.knockout?.enabled && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-slate-300 mb-1.5">
+                        Số Đội/VĐV Mỗi Bảng Vào Knockout
+                      </label>
+                      <select
+                        value={configForm.knockout?.qualifiersPerGroup || 2}
+                        onChange={(e) =>
+                          setConfigForm({
+                            ...configForm,
+                            knockout: {
+                              ...configForm.knockout,
+                              qualifiersPerGroup: parseInt(e.target.value) || 2,
+                            },
+                          })
+                        }
+                        className="input-base text-xs"
+                      >
+                        <option value={1}>1 Đội (Chỉ Nhất bảng)</option>
+                        <option value={2}>2 Đội (Nhất và Nhì bảng)</option>
+                        <option value={4}>4 Đội (Top 4 đội mỗi bảng)</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 border-t border-white/[0.08] flex justify-end">
                 <button
                   type="submit"
                   disabled={saving}
-                  className="btn-primary px-5 py-2.5 text-xs sm:text-sm font-bold flex items-center gap-2"
+                  className="btn-primary px-6 py-2.5 text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-950/40 cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
                   {saving ? 'Đang lưu...' : 'Lưu Thay Đổi Cấu Hình'}

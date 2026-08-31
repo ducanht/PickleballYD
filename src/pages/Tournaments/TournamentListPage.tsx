@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getTournaments, createTournament } from '../../features/tournaments/tournamentService';
+import { TournamentCreateModal } from '../../features/tournaments/components/TournamentCreateModal';
 import { useIsEditor } from '../../contexts/AuthContext';
-import type { Tournament, TournamentStatus, TournamentConfig } from '../../types';
+import type { Tournament, TournamentStatus, TournamentConfig, GenderMode } from '../../types';
 import {
   Trophy,
   Plus,
@@ -11,12 +12,9 @@ import {
   Loader2,
   Search,
   Activity,
-  ArrowRight,
-  Shield,
-  Layers,
   MapPin,
-  X,
-  Sparkles,
+  Layers,
+  Users,
 } from 'lucide-react';
 
 const FORMAT_LABEL: Record<string, string> = {
@@ -24,32 +22,20 @@ const FORMAT_LABEL: Record<string, string> = {
   ROTATING_DOUBLES: 'Rotating Doubles (Cặp Xoay Vòng)',
 };
 
+const GENDER_MODE_LABEL: Record<GenderMode, string> = {
+  MALE: 'Đôi Nam',
+  FEMALE: 'Đôi Nữ',
+  MIXED: 'Đôi Nam Nữ',
+};
+
 const STATUS_LABEL: Record<string, string> = {
-  DRAFT: 'Nháp',
+  DRAFT: 'Bản nháp',
   DRAWING: 'Đang bốc thăm',
   DRAWN: 'Đã chia bảng',
   ONGOING: 'Đang diễn ra',
   COMPLETED: 'Kết thúc',
   CANCELLED: 'Hủy',
   ARCHIVED: 'Lưu trữ',
-};
-
-const DEFAULT_CONFIG: TournamentConfig = {
-  format: 'FIXED_DOUBLES',
-  participants: { genderMode: 'MIXED', maxPlayers: 16 },
-  rotating: {
-    uniquePartnersRequired: 3,
-    matchesRequiredPerPlayer: 'AUTO',
-    maxPartnerRepeat: 1,
-    balanceMatches: true,
-    balanceRest: true,
-    minimizeOpponentRepeat: true,
-  },
-  groups: { numberOfGroups: 2, maxEntitiesPerGroup: 4, assignmentMode: 'RANDOM' },
-  scoring: { matchFormat: 'SINGLE_GAME', pointsToWin: 11, winByTwo: true, maxPoints: 15 },
-  ranking: { rules: ['MATCH_WINS', 'POINT_DIFFERENCE', 'POINTS_WON', 'HEAD_TO_HEAD'] },
-  knockout: { enabled: true, qualifiersPerGroup: 2, pairingMode: 'FIXED_BRACKET', drawMode: 'RANDOM' },
-  scheduling: { courts: 2, restBetweenMatches: 5 },
 };
 
 function formatDate(dateInput: unknown): string {
@@ -63,15 +49,6 @@ function formatDate(dateInput: unknown): string {
 
 type TabFilter = 'ALL' | TournamentStatus;
 
-interface CreateForm {
-  name: string;
-  format: 'FIXED_DOUBLES' | 'ROTATING_DOUBLES';
-  startDate: string;
-  venue: string;
-  courts: number;
-  maxPlayers: number;
-}
-
 export default function TournamentListPage() {
   const navigate = useNavigate();
   const isEditor = useIsEditor();
@@ -82,16 +59,8 @@ export default function TournamentListPage() {
   const [tab, setTab] = useState<TabFilter>('ALL');
   const [search, setSearch] = useState('');
 
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState<CreateForm>({
-    name: '',
-    format: 'FIXED_DOUBLES',
-    startDate: new Date().toISOString().split('T')[0],
-    venue: 'Sân Pickleball Trung Tâm Yên Định',
-    courts: 2,
-    maxPlayers: 16,
-  });
 
   const loadData = () => {
     setLoading(true);
@@ -110,25 +79,28 @@ export default function TournamentListPage() {
     loadData();
   }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name.trim() || !form.startDate) return;
+  const handleCreateTournament = async ({
+    name,
+    startDate,
+    venue: _venue,
+    config,
+  }: {
+    name: string;
+    startDate: string;
+    venue: string;
+    config: TournamentConfig;
+  }) => {
     setCreating(true);
     try {
       const newId = await createTournament({
-        name: form.name.trim(),
-        startDate: form.startDate as unknown as import('firebase/firestore').Timestamp,
+        name,
+        startDate: startDate as unknown as import('firebase/firestore').Timestamp,
         status: 'DRAFT',
-        config: {
-          ...DEFAULT_CONFIG,
-          format: form.format,
-          scheduling: { courts: form.courts, restBetweenMatches: 5 },
-          participants: { genderMode: 'MIXED', maxPlayers: form.maxPlayers },
-        },
-        publicSlug: form.name.trim().toLowerCase().replace(/\s+/g, '-'),
+        config,
+        publicSlug: name.toLowerCase().replace(/\s+/g, '-'),
         createdBy: '',
       });
-      setShowCreate(false);
+      setShowCreateModal(false);
       navigate(`/tournaments/${newId}`);
     } catch (e: unknown) {
       alert((e as Error).message ?? 'Lỗi tạo giải đấu');
@@ -166,7 +138,7 @@ export default function TournamentListPage() {
               Hệ Thống Giải Đấu
             </h1>
             <p className="text-slate-400 text-xs sm:text-sm mt-0.5">
-              Tổ chức thi đấu, bốc thăm, cập nhật lịch và phát trực tiếp Live Score
+              Hội Cựu Học Sinh Yên Định • Quản lý giải đấu, bốc thăm & phát trực tiếp Live Score
             </p>
           </div>
         </div>
@@ -174,8 +146,8 @@ export default function TournamentListPage() {
         {isEditor && (
           <button
             id="btn-create-tournament"
-            onClick={() => setShowCreate(true)}
-            className="btn-primary px-5 py-2.5 text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-950/40 w-full sm:w-auto justify-center"
+            onClick={() => setShowCreateModal(true)}
+            className="btn-primary px-5 py-2.5 text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-950/40 w-full sm:w-auto justify-center cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Tạo Giải Mới</span>
@@ -236,7 +208,7 @@ export default function TournamentListPage() {
           </div>
           {isEditor && (
             <button
-              onClick={() => setShowCreate(true)}
+              onClick={() => setShowCreateModal(true)}
               className="btn-primary text-xs px-4 py-2 mt-2"
             >
               Tạo giải đấu ngay
@@ -252,14 +224,21 @@ export default function TournamentListPage() {
             >
               <div className="space-y-3">
                 {/* Header tags */}
-                <div className="flex items-center justify-between gap-2">
-                  <span
-                    className={`inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-lg ${
-                      t.config.format === 'FIXED_DOUBLES' ? 'badge-blue' : 'badge-orange'
-                    }`}
-                  >
-                    {t.config.format === 'FIXED_DOUBLES' ? 'Fixed Doubles' : 'Rotating Doubles'}
-                  </span>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-lg ${
+                        t.config.format === 'FIXED_DOUBLES' ? 'badge-blue' : 'badge-orange'
+                      }`}
+                    >
+                      {t.config.format === 'FIXED_DOUBLES' ? 'Fixed Doubles' : 'Rotating Doubles'}
+                    </span>
+                    {t.config.participants?.genderMode && (
+                      <span className="badge-emerald text-[11px] font-bold">
+                        {GENDER_MODE_LABEL[t.config.participants.genderMode] || t.config.participants.genderMode}
+                      </span>
+                    )}
+                  </div>
                   <span className={`status-${t.status.toLowerCase()} text-[11px]`}>
                     {STATUS_LABEL[t.status] ?? t.status}
                   </span>
@@ -273,11 +252,23 @@ export default function TournamentListPage() {
                   {t.name}
                 </h3>
 
-                {/* Venue & courts */}
-                <p className="text-xs text-slate-400 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                  <span className="line-clamp-1">Sân Pickleball Trung Tâm Yên Định</span>
-                </p>
+                {/* Venue & Groups Info */}
+                <div className="space-y-1 text-xs text-slate-400">
+                  <p className="flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                    <span className="line-clamp-1">Sân Pickleball Trung Tâm Yên Định</span>
+                  </p>
+                  <p className="flex items-center gap-3 text-slate-300 font-semibold pt-1">
+                    <span className="flex items-center gap-1">
+                      <Layers className="w-3.5 h-3.5 text-blue-400" />
+                      {t.config.groups?.numberOfGroups || 1} Bảng đấu
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Users className="w-3.5 h-3.5 text-emerald-400" />
+                      {t.config.participants?.maxPlayers || 16} VĐV
+                    </span>
+                  </p>
+                </div>
               </div>
 
               {/* Meta details */}
@@ -289,7 +280,7 @@ export default function TournamentListPage() {
                   </span>
                   <span className="flex items-center gap-1.5">
                     <Settings className="w-3.5 h-3.5 text-slate-500" />
-                    {t.config.scheduling.courts} Sân • {t.config.scoring.pointsToWin}đ
+                    {t.config.scheduling?.courts || 2} Sân • {t.config.scoring?.pointsToWin || 11}đ
                   </span>
                 </div>
 
@@ -315,130 +306,13 @@ export default function TournamentListPage() {
         </div>
       )}
 
-      {/* ── Create Tournament Modal ───────────────────────────────────── */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
-          <div className="w-full max-w-lg glass-panel p-6 sm:p-8 space-y-6 shadow-2xl relative">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-bold text-white flex items-center gap-2.5 font-display">
-                <Trophy className="w-5 h-5 text-orange-500" />
-                Khởi Tạo Giải Đấu Mới
-              </h3>
-              <button
-                onClick={() => setShowCreate(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                  Tên Giải Đấu *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="input-base"
-                  placeholder="VD: Giải Pickleball Cây Vợt Vàng Yên Định 2026"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Hình Thức Thi Đấu *
-                  </label>
-                  <select
-                    value={form.format}
-                    onChange={(e) =>
-                      setForm({ ...form, format: e.target.value as CreateForm['format'] })
-                    }
-                    className="input-base"
-                  >
-                    <option value="FIXED_DOUBLES">Cặp Cố Định (Fixed Doubles)</option>
-                    <option value="ROTATING_DOUBLES">Cặp Xoay Vòng (Rotating Doubles)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Ngày Khởi Tranh *
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={form.startDate}
-                    onChange={(e) => setForm({ ...form, startDate: e.target.value })}
-                    className="input-base"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                  Địa Điểm Sân Đấu
-                </label>
-                <input
-                  type="text"
-                  value={form.venue}
-                  onChange={(e) => setForm({ ...form, venue: e.target.value })}
-                  className="input-base"
-                  placeholder="VD: Sân Pickleball Trung Tâm Yên Định"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Số Sân Thi Đấu
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={form.courts}
-                    onChange={(e) => setForm({ ...form, courts: parseInt(e.target.value) || 2 })}
-                    className="input-base"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Số VĐV Tối Đa
-                  </label>
-                  <input
-                    type="number"
-                    min={4}
-                    max={64}
-                    value={form.maxPlayers}
-                    onChange={(e) => setForm({ ...form, maxPlayers: parseInt(e.target.value) || 16 })}
-                    className="input-base"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-white/[0.08]">
-                <button
-                  type="button"
-                  onClick={() => setShowCreate(false)}
-                  className="btn-secondary text-xs px-4 py-2.5"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="btn-primary text-xs px-5 py-2.5 font-bold"
-                >
-                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Xác Nhận Tạo Giải'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* ── Advanced Tournament Create Modal ───────────────────────────── */}
+      <TournamentCreateModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSubmit={handleCreateTournament}
+        loading={creating}
+      />
     </div>
   );
 }

@@ -3,15 +3,23 @@
  * SRS V6 §10 — Generate rotating doubles rounds where players pair with new partners each round.
  *
  * Requirements:
- * - Minimum 4 players.
+ * - Minimum 4 players per group/pool.
  * - In each round, players are divided into 4-player courts (2 vs 2).
  * - Minimizes partner repetitions across rounds.
+ * - Supports multi-group rotating schedules.
  */
 
 import type { EnginePlayer, EngineMatch } from '../../types';
 
-export interface RotatingScheduleInput {
+export interface RotatingGroupInput {
+  groupId?: string;
+  groupName?: string;
   players: EnginePlayer[];
+}
+
+export interface RotatingScheduleInput {
+  players?: EnginePlayer[];
+  groups?: RotatingGroupInput[];
   roundsCount: number;
   courts: number;
   seed: string;
@@ -36,15 +44,19 @@ function seededRandom(seedStr: string) {
 }
 
 /**
- * Generates Rotating Doubles rounds.
- * Uses a greedy partner-history matrix to minimize repeat partner pairings.
+ * Generate rotating schedule for a single pool of players.
  */
-export function generateRotatingSchedule(input: RotatingScheduleInput): RotatingScheduleResult {
-  const { players, roundsCount, courts, seed } = input;
+function generatePoolSchedule(
+  players: EnginePlayer[],
+  roundsCount: number,
+  courts: number,
+  seed: string,
+  startOrder: number = 1,
+  groupId: string | null = null
+): { rounds: Array<{ round: number; matches: EngineMatch[] }>; nextOrder: number } {
   const n = players.length;
-
   if (n < 4) {
-    throw new Error('Cần ít nhất 4 người chơi cho thể thức Cặp Xoay Vòng.');
+    throw new Error('Mỗi bảng xoay vòng cần ít nhất 4 người chơi.');
   }
 
   const rng = seededRandom(seed);
@@ -57,8 +69,8 @@ export function generateRotatingSchedule(input: RotatingScheduleInput): Rotating
     }
   }
 
-  const scheduleRounds: RotatingScheduleResult['rounds'] = [];
-  let globalOrder = 1;
+  const scheduleRounds: Array<{ round: number; matches: EngineMatch[] }> = [];
+  let currentOrder = startOrder;
 
   for (let r = 1; r <= roundsCount; r++) {
     // Shuffle player pool for this round
@@ -67,9 +79,7 @@ export function generateRotatingSchedule(input: RotatingScheduleInput): Rotating
     let courtIdx = 0;
 
     while (pool.length >= 4) {
-      // Pick 4 players for one match: [p1, p2] vs [p3, p4]
       const p1 = pool.shift()!;
-      // Find partner for p1 with lowest partner count
       pool.sort((a, b) => (partnerCounts[p1.id][a.id] || 0) - (partnerCounts[p1.id][b.id] || 0));
       const p2 = pool.shift()!;
 
@@ -77,7 +87,6 @@ export function generateRotatingSchedule(input: RotatingScheduleInput): Rotating
       pool.sort((a, b) => (partnerCounts[p3.id][a.id] || 0) - (partnerCounts[p3.id][b.id] || 0));
       const p4 = pool.shift()!;
 
-      // Track partner usage
       partnerCounts[p1.id][p2.id] = (partnerCounts[p1.id][p2.id] || 0) + 1;
       partnerCounts[p2.id][p1.id] = (partnerCounts[p2.id][p1.id] || 0) + 1;
       partnerCounts[p3.id][p4.id] = (partnerCounts[p3.id][p4.id] || 0) + 1;
@@ -90,7 +99,7 @@ export function generateRotatingSchedule(input: RotatingScheduleInput): Rotating
         team1: [p1.id, p2.id],
         team2: [p3.id, p4.id],
         round: r,
-        order: globalOrder++,
+        order: currentOrder++,
         courtId,
       });
     }
@@ -101,11 +110,64 @@ export function generateRotatingSchedule(input: RotatingScheduleInput): Rotating
     });
   }
 
-  const totalMatches = scheduleRounds.reduce((sum, rd) => sum + rd.matches.length, 0);
+  return { rounds: scheduleRounds, nextOrder: currentOrder };
+}
 
-  return {
-    rounds: scheduleRounds,
-    totalMatches,
-    algorithmVersion: '1.0.0',
-  };
+/**
+ * Generates Rotating Doubles rounds (supporting single pool or multi-groups).
+ */
+export function generateRotatingSchedule(input: RotatingScheduleInput): RotatingScheduleResult {
+  const { players, groups, roundsCount, courts, seed } = input;
+
+  // Single pool case
+  if (players && players.length > 0) {
+    const { rounds } = generatePoolSchedule(players, roundsCount, courts, seed);
+    const totalMatches = rounds.reduce((acc, r) => acc + r.matches.length, 0);
+    return {
+      rounds,
+      totalMatches,
+      algorithmVersion: '1.2.0',
+    };
+  }
+
+  // Multi-group case
+  if (groups && groups.length > 0) {
+    const combinedRoundsMap: Record<number, EngineMatch[]> = {};
+    for (let r = 1; r <= roundsCount; r++) {
+      combinedRoundsMap[r] = [];
+    }
+
+    let globalOrder = 1;
+    for (let gIdx = 0; gIdx < groups.length; gIdx++) {
+      const g = groups[gIdx];
+      const groupSeed = `${seed}-group-${gIdx}`;
+      const { rounds: groupRounds, nextOrder } = generatePoolSchedule(
+        g.players,
+        roundsCount,
+        courts,
+        groupSeed,
+        globalOrder,
+        g.groupId || null
+      );
+      globalOrder = nextOrder;
+
+      for (const gr of groupRounds) {
+        combinedRoundsMap[gr.round].push(...gr.matches);
+      }
+    }
+
+    const finalRounds = Object.entries(combinedRoundsMap).map(([roundNum, matches]) => ({
+      round: parseInt(roundNum),
+      matches,
+    }));
+
+    const totalMatches = finalRounds.reduce((acc, r) => acc + r.matches.length, 0);
+    return {
+      rounds: finalRounds,
+      totalMatches,
+      algorithmVersion: '1.2.0',
+    };
+  }
+
+  throw new Error('Cần cung cấp danh sách VĐV hoặc danh sách Bảng đấu để sinh lịch xoay vòng.');
 }

@@ -8,8 +8,9 @@ import {
   updateTournamentStatus,
 } from '../../../features/tournaments/tournamentService';
 import { generateRotatingSchedule } from '../../../features/rotatingDoubles/rotatingDoublesEngine';
+import { feasibilityCheck } from '../../../features/tournaments/engine/feasibilityCheck';
 import { useIsEditor } from '../../../contexts/AuthContext';
-import type { Tournament, Participant, Match, EnginePlayer } from '../../../types';
+import type { Tournament, Participant, Match, EnginePlayer, GenderMode } from '../../../types';
 import {
   ArrowLeft,
   Trophy,
@@ -18,7 +19,16 @@ import {
   AlertTriangle,
   Loader2,
   Sparkles,
+  Layers,
+  Users,
+  Calendar,
 } from 'lucide-react';
+
+const GENDER_MODE_LABEL: Record<GenderMode, string> = {
+  MALE: 'VĐV Nam',
+  FEMALE: 'VĐV Nữ',
+  MIXED: 'Nam & Nữ Hỗn Hợp',
+};
 
 export default function RotatingDrawPage() {
   const { id } = useParams<{ id: string }>();
@@ -39,6 +49,9 @@ export default function RotatingDrawPage() {
       .then(([t, p]) => {
         setTournament(t);
         setParticipants(p);
+        if (t?.config.rotating?.matchesRequiredPerPlayer && typeof t.config.rotating.matchesRequiredPerPlayer === 'number') {
+          setRoundsCount(t.config.rotating.matchesRequiredPerPlayer);
+        }
       })
       .finally(() => setLoading(false));
   }, [id]);
@@ -75,6 +88,20 @@ export default function RotatingDrawPage() {
     );
   }
 
+  const genderMode = tournament.config.participants?.genderMode || 'MIXED';
+  const courts = tournament.config.scheduling?.courts || 2;
+
+  // Feasibility Check
+  const feasibility = feasibilityCheck({
+    numPlayers: participants.length,
+    uniquePartnersRequired: Math.min(
+      tournament.config.rotating?.uniquePartnersRequired || 3,
+      Math.max(1, participants.length - 1)
+    ),
+    matchesRequiredPerPlayer: roundsCount,
+    courts,
+  });
+
   const handleGenerateRotating = () => {
     if (participants.length < 4) {
       alert('Cần ít nhất 4 VĐV để tổ chức thi đấu Cặp Xoay Vòng.');
@@ -89,7 +116,7 @@ export default function RotatingDrawPage() {
     const result = generateRotatingSchedule({
       players: enginePlayers,
       roundsCount,
-      courts: tournament.config.scheduling.courts || 2,
+      courts,
       seed: `${tournament.id}-${Date.now()}`,
     });
 
@@ -138,7 +165,7 @@ export default function RotatingDrawPage() {
       await saveDrawRecord(id, {
         drawType: 'PARTNER',
         seed: `${id}-${Date.now()}`,
-        algorithmVersion: '1.0.0',
+        algorithmVersion: '1.2.0',
         inputHash: `${participants.length}-${roundsCount}`,
         result: {
           participantsCount: participants.length,
@@ -150,137 +177,175 @@ export default function RotatingDrawPage() {
       });
 
       await updateTournamentStatus(id, 'DRAWN');
-      alert('Đã tạo lịch thi đấu Xoay Vòng thành công!');
-      navigate(`/tournaments/${id}/schedule`);
-    } catch (err: unknown) {
-      alert((err as Error).message || 'Có lỗi khi lưu lịch thi đấu.');
+
+      alert('Đã lưu lịch thi đấu Xoay Vòng thành công!');
+      navigate(`/tournaments/${id}`);
+    } catch (e: unknown) {
+      alert((e as Error).message ?? 'Lỗi lưu lịch thi đấu');
     } finally {
       setGenerating(false);
     }
   };
 
   return (
-    <div className="page-container animate-fade-in-up">
+    <div className="page-container space-y-8 animate-fade-in-up">
       {/* Back button */}
       <button
         onClick={() => navigate(`/tournaments/${id}`)}
-        className="flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors mb-6 text-sm"
+        className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs sm:text-sm font-semibold cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
-        Quay lại giải đấu
+        Quay lại chi tiết giải đấu
       </button>
 
-      {/* Header */}
-      <div className="card mb-6">
+      {/* Top Header Card */}
+      <div className="glass-panel p-6 sm:p-8 space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="w-5 h-5 text-orange-500" />
-              <h1 className="text-2xl font-extrabold text-white tracking-tight">
-                Bốc Thăm Cặp Xoay Vòng: {tournament.name}
-              </h1>
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              <span className="badge-orange text-xs font-bold">Rotating Doubles</span>
+              <span className="badge-emerald text-xs font-bold">
+                {GENDER_MODE_LABEL[genderMode]}
+              </span>
+              <span className="badge-blue text-xs font-bold">
+                {participants.length} VĐV Đăng Ký
+              </span>
             </div>
-            <p className="text-slate-400 text-sm">
-              Thể thức Rotating Doubles · {participants.length} VĐV đã đăng ký
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight font-display">
+              Bốc Thăm & Tạo Lịch Xoay Vòng: {tournament.name}
+            </h1>
+            <p className="text-xs text-slate-400 mt-1">
+              Mỗi vòng đấu các VĐV sẽ xoay chuyển ghép đôi với bạn cặp mới và tích lũy điểm cá nhân.
             </p>
           </div>
         </div>
-      </div>
 
-      {/* Settings Card */}
-      <div className="card mb-6">
-        <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
-          <Repeat className="w-5 h-5 text-orange-400" />
-          Cấu Hình Lịch Xoay Vòng
-        </h2>
+        {/* Config and Feasibility Controls */}
+        <div className="glass-card p-5 space-y-4 border-white/[0.08]">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
+                  Số Lượt Đấu Mỗi VĐV
+                </label>
+                <input
+                  type="number"
+                  min={2}
+                  max={10}
+                  value={roundsCount}
+                  onChange={(e) => setRoundsCount(parseInt(e.target.value) || 4)}
+                  className="input-base text-xs py-2 w-28"
+                />
+              </div>
+              <div className="text-xs text-slate-400 pt-4">
+                Tổng dự kiến: <strong className="text-white">{Math.floor((participants.length * roundsCount) / 4)} trận</strong> ({courts} sân)
+              </div>
+            </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-              Số lượng vòng thi đấu
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={10}
-              value={roundsCount}
-              onChange={(e) => setRoundsCount(Number(e.target.value))}
-              className="input-base w-full"
-            />
-          </div>
-
-          <div className="flex items-end">
             <button
               onClick={handleGenerateRotating}
-              disabled={participants.length < 4}
-              className="btn-primary w-full flex items-center justify-center gap-2 text-sm"
+              className="btn-primary px-6 py-2.5 text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer shadow-lg shadow-orange-950/40"
             >
-              <Repeat className="w-4 h-4" />
-              Tạo Lịch Xoay Vòng
+              <Sparkles className="w-4 h-4" />
+              <span>Tạo Lịch Thi Đấu Xoay Vòng</span>
             </button>
           </div>
-        </div>
 
-        {participants.length < 4 && (
-          <div className="p-3 bg-red-950/40 border border-red-800/60 rounded-lg text-red-400 text-xs flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>Cần tối thiểu 4 VĐV để tạo lịch thi đấu Xoay Vòng.</span>
-          </div>
-        )}
+          {!feasibility.feasible && (
+            <div className="p-3.5 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-300 text-xs space-y-1.5">
+              <div className="flex items-center gap-1.5 font-bold">
+                <AlertTriangle className="w-4 h-4" />
+                <span>Cảnh báo tính khả thi:</span>
+              </div>
+              {feasibility.errors.map((err, i) => (
+                <p key={i}>• {err}</p>
+              ))}
+              {feasibility.suggestions.map((sug, i) => (
+                <p key={i} className="text-slate-300">
+                  💡 Gợi ý: {sug}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Preview Fixtures */}
+      {/* ── Generated Matches Preview ────────────────────────────────────── */}
       {previewMatches.length > 0 && (
-        <div className="card space-y-5">
+        <div className="glass-panel p-6 sm:p-8 space-y-6 animate-fade-in">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                Xem Trước Lịch Thi Đấu ({previewMatches.length} trận · {roundsCount} vòng)
-              </h3>
-              <p className="text-slate-400 text-xs mt-1">
-                Các VĐV được ghép cặp luân phiên ngẫu nhiên giảm thiểu tối đa trùng cặp.
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-emerald-400" />
+                Xem Trước Lịch Thi Đấu Xoay Vòng ({previewMatches.length} trận đấu)
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Các cặp đấu đã được tối ưu hóa hạn chế tối đa lặp bạn cặp
               </p>
             </div>
+
             <button
               onClick={handleCommitSchedule}
               disabled={generating}
-              className="btn-primary flex items-center gap-2 text-sm shrink-0"
+              className="btn-primary px-6 py-2.5 text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-950/50 cursor-pointer"
             >
-              {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              Xác Nhận & Bắt Đầu Giải
+              {generating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Đang Lưu...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Xác Nhận & Lưu Lịch Đấu</span>
+                </>
+              )}
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-800 bg-slate-900/50 text-slate-400 text-xs">
-                  <th className="text-left px-3 py-2">Trận</th>
-                  <th className="text-left px-3 py-2">Vòng</th>
-                  <th className="text-left px-3 py-2">Sân</th>
-                  <th className="text-left px-3 py-2">Đôi 1</th>
-                  <th className="text-center px-3 py-2">VS</th>
-                  <th className="text-left px-3 py-2">Đôi 2</th>
-                </tr>
-              </thead>
-              <tbody>
-                {previewMatches.map((m) => (
-                  <tr key={m.order} className="border-b border-slate-800/40 hover:bg-slate-800/20">
-                    <td className="px-3 py-2.5 font-bold text-orange-400">#{m.order}</td>
-                    <td className="px-3 py-2.5 text-slate-300 font-medium">Vòng {m.round}</td>
-                    <td className="px-3 py-2.5 text-slate-400">{m.courtId}</td>
-                    <td className="px-3 py-2.5 font-medium text-white">
-                      {m.team1.p1Name} & {m.team1.p2Name}
-                    </td>
-                    <td className="px-3 py-2.5 text-center text-slate-500 font-bold">vs</td>
-                    <td className="px-3 py-2.5 font-medium text-white">
-                      {m.team2.p1Name} & {m.team2.p2Name}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[550px] overflow-y-auto pr-1">
+            {previewMatches.map((m, idx) => (
+              <div
+                key={idx}
+                className="glass-card p-4 flex items-center justify-between gap-3 text-xs border-white/[0.06]"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-xl bg-orange-500/10 text-orange-400 font-bold flex items-center justify-center font-score">
+                    #{m.order}
+                  </span>
+                  <div>
+                    <div className="text-slate-400 text-[11px]">
+                      Vòng {m.round} • <span className="text-emerald-400 font-semibold">{m.courtId}</span>
+                    </div>
+                    <div className="text-sm font-bold text-white mt-0.5">
+                      <span className="text-orange-400">{m.team1.p1Name} & {m.team1.p2Name}</span>
+                      <span className="text-slate-500 mx-2">VS</span>
+                      <span className="text-blue-400">{m.team2.p1Name} & {m.team2.p2Name}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-end pt-4 border-t border-white/[0.08]">
+            <button
+              onClick={handleCommitSchedule}
+              disabled={generating}
+              className="btn-primary px-6 py-2.5 text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-950/50 cursor-pointer"
+            >
+              {generating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Đang Lưu...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Xác Nhận & Lưu Lịch Đấu</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       )}
