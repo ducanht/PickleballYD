@@ -8,6 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "npx tsx test-all-engines.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
     "deploy:firebase": "firebase deploy --only hosting,firestore:rules --project yendinhk9801 --non-interactive",
     "preview": "vite preview"
   },
@@ -26,6 +29,7 @@
     "react-router-dom": "^7.18.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
