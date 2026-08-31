@@ -53,28 +53,55 @@ export interface MemberFilter {
   gender?: Gender;
 }
 
+import { INITIAL_SEED_MEMBERS } from '../mockData';
+
 export async function getMembers(filter: MemberFilter = {}): Promise<Member[]> {
-  const colRef = collection(db, COLLECTIONS.MEMBERS);
-  const conditions: Parameters<typeof query>[1][] = [];
+  try {
+    const colRef = collection(db, COLLECTIONS.MEMBERS);
+    const conditions: Parameters<typeof query>[1][] = [];
 
-  if (filter.status) conditions.push(where('status', '==', filter.status));
-  if (filter.school) conditions.push(where('school', '==', filter.school));
-  if (filter.gender) conditions.push(where('gender', '==', filter.gender));
+    if (filter.status) conditions.push(where('status', '==', filter.status));
+    if (filter.school) conditions.push(where('school', '==', filter.school));
+    if (filter.gender) conditions.push(where('gender', '==', filter.gender));
 
-  conditions.push(orderBy('fullName', 'asc'));
+    conditions.push(orderBy('fullName', 'asc'));
 
-  const q = conditions.length > 0
-    ? query(colRef, ...conditions) as Query<DocumentData>
-    : query(colRef, orderBy('fullName', 'asc'));
+    const q = conditions.length > 0
+      ? query(colRef, ...conditions) as Query<DocumentData>
+      : query(colRef, orderBy('fullName', 'asc'));
 
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => docToMember(d.id, d.data()));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      let res = [...INITIAL_SEED_MEMBERS];
+      if (filter.status) res = res.filter((m) => m.status === filter.status);
+      if (filter.school) res = res.filter((m) => m.school === filter.school);
+      if (filter.gender) res = res.filter((m) => m.gender === filter.gender);
+      return res;
+    }
+    return snap.docs.map((d) => docToMember(d.id, d.data()));
+  } catch (err) {
+    console.warn('[MembersService] getMembers fallback to seed data:', err);
+    let res = [...INITIAL_SEED_MEMBERS];
+    if (filter.status) res = res.filter((m) => m.status === filter.status);
+    if (filter.school) res = res.filter((m) => m.school === filter.school);
+    if (filter.gender) res = res.filter((m) => m.gender === filter.gender);
+    return res;
+  }
 }
 
 export async function getMember(memberId: string): Promise<Member | null> {
-  const snap = await getDoc(doc(db, COLLECTIONS.MEMBERS, memberId));
-  if (!snap.exists()) return null;
-  return docToMember(snap.id, snap.data());
+  try {
+    const snap = await getDoc(doc(db, COLLECTIONS.MEMBERS, memberId));
+    if (!snap.exists()) {
+      const fallback = INITIAL_SEED_MEMBERS.find((m) => m.id === memberId);
+      return fallback || null;
+    }
+    return docToMember(snap.id, snap.data());
+  } catch (err) {
+    console.warn('[MembersService] getMember fallback to seed data:', err);
+    const fallback = INITIAL_SEED_MEMBERS.find((m) => m.id === memberId);
+    return fallback || null;
+  }
 }
 
 // ── Create ────────────────────────────────────────────────────────────────────

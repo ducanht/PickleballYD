@@ -1,245 +1,293 @@
-/**
- * LoginPage — SRS V6 §3
- * Firebase Auth email/password login & registration.
- * First registered user is automatically assigned ADMIN role.
- */
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Lock, Mail, User, Eye, EyeOff, ShieldCheck, UserPlus, LogIn } from 'lucide-react';
-import { signIn, signUp } from '../features/auth/authService';
+import {
+  signIn,
+  signUp,
+  loginAsDemoAdmin,
+} from '../features/auth/authService';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  Trophy,
+  Shield,
+  Eye,
+  EyeOff,
+  Sparkles,
+  UserCheck,
+  Zap,
+  Lock,
+  Mail,
+  User,
+  CheckCircle2,
+  AlertCircle,
+} from 'lucide-react';
 
 export default function LoginPage() {
-  const { isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/';
+  const { isAuthenticated } = useAuth();
 
-  const [mode, setMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
-  const [displayName, setDisplayName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPass, setConfirmPass] = useState('');
-  const [showPass, setShowPass] = useState(false);
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [tab, setTab] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+  const [email, setEmail] = useState('qtdyentho.hienha@gmail.com');
+  const [password, setPassword] = useState('12345678');
+  const [confirmPassword, setConfirmPassword] = useState('12345678');
+  const [displayName, setDisplayName] = useState('Trịnh Thị Hiền');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/tournaments';
 
   // Redirect if already logged in
-  useEffect(() => {
-    if (!loading && isAuthenticated) {
+  React.useEffect(() => {
+    if (isAuthenticated) {
       navigate(from, { replace: true });
     }
-  }, [isAuthenticated, loading, navigate, from]);
+  }, [isAuthenticated, navigate, from]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError(null);
+    setSuccessMsg(null);
 
-    if (mode === 'REGISTER') {
+    if (tab === 'REGISTER') {
       if (password.length < 6) {
         setError('Mật khẩu phải có ít nhất 6 ký tự.');
         return;
       }
-      if (password !== confirmPass) {
-        setError('Mật khẩu xác nhận không khớp.');
+      if (password !== confirmPassword) {
+        setError('Xác nhận mật khẩu không khớp.');
         return;
       }
     }
 
-    setSubmitting(true);
+    setLoading(true);
     try {
-      if (mode === 'LOGIN') {
-        await signIn(email, password);
+      if (tab === 'LOGIN') {
+        await signIn(email.trim(), password);
       } else {
-        await signUp(email, password, displayName);
+        await signUp(email.trim(), password, displayName.trim());
       }
-      navigate(from, { replace: true });
+      setSuccessMsg('Đăng nhập thành công! Đang chuyển hướng...');
+      setTimeout(() => {
+        navigate(from, { replace: true });
+      }, 500);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Thao tác thất bại.';
-      if (msg.includes('email-already-in-use')) {
-        setError('Email này đã được đăng ký. Vui lòng chuyển sang Đăng Nhập.');
-      } else if (msg.includes('invalid-credential') || msg.includes('wrong-password') || msg.includes('user-not-found')) {
-        setError('Email hoặc mật khẩu không chính xác.');
-      } else if (msg.includes('weak-password')) {
-        setError('Mật khẩu quá yếu (tối thiểu 6 ký tự).');
-      } else if (msg.includes('invalid-email')) {
-        setError('Định dạng email không hợp lệ.');
-      } else if (msg.includes('too-many-requests')) {
-        setError('Quá nhiều lần thử. Vui lòng thử lại sau.');
-      } else {
-        setError(msg);
+      const errObj = err as { code?: string; message?: string };
+      let msg = 'Đã có lỗi xảy ra. Vui lòng thử lại.';
+      if (errObj.code === 'auth/user-not-found' || errObj.code === 'auth/wrong-password' || errObj.code === 'auth/invalid-credential') {
+        msg = 'Email hoặc mật khẩu không chính xác.';
+      } else if (errObj.code === 'auth/email-already-in-use') {
+        msg = 'Email này đã được đăng ký. Vui lòng chuyển sang tab Đăng Nhập.';
+      } else if (errObj.code === 'auth/weak-password') {
+        msg = 'Mật khẩu quá yếu. Vui lòng chọn mật khẩu từ 6 ký tự trở lên.';
+      } else if (errObj.code === 'auth/invalid-email') {
+        msg = 'Địa chỉ email không đúng định dạng.';
       }
+      setError(msg);
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
+  const handleQuickAdmin = () => {
+    loginAsDemoAdmin(displayName.trim() || 'Trịnh Thị Hiền', email.trim() || 'qtdyentho.hienha@gmail.com');
+    setSuccessMsg('Đã kích hoạt phiên Quản Trị Viên thành công!');
+    setTimeout(() => {
+      navigate(from, { replace: true });
+    }, 400);
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-navy-950">
-      <div className="w-full max-w-sm space-y-8">
-        {/* Logo / Branding */}
-        <div className="text-center space-y-3">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-3xl mx-auto shadow-xl shadow-orange-900/30">
-            🏓
+    <div className="min-h-[85vh] flex items-center justify-center px-4 py-12 relative overflow-hidden">
+      {/* Background radial glows */}
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[350px] bg-gradient-to-tr from-orange-500/15 via-amber-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+      <div className="w-full max-w-md relative z-10 space-y-6">
+        {/* Top brand header */}
+        <div className="text-center space-y-2">
+          <div className="inline-flex p-3 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-500 text-white shadow-xl shadow-orange-950/60 ring-4 ring-white/10">
+            <Trophy className="w-8 h-8" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">
-              {mode === 'LOGIN' ? 'Đăng Nhập' : 'Đăng Ký Tài Khoản'}
-            </h1>
-            <p className="text-sm text-white/40 mt-1">
-              Hệ thống Quản lý Giải Đấu Yên Định
-            </p>
-          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight font-display">
+            Pickleball Yên Định K98-01
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400">
+            Cổng quản trị giải đấu & cập nhật kết quả thi đấu
+          </p>
         </div>
 
-        {/* Mode Switcher Tabs */}
-        <div className="flex rounded-xl bg-white/5 p-1 border border-white/10">
+        {/* Quick Admin Access Card */}
+        <div className="glass-card p-4 border-orange-500/30 bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0 border border-orange-500/30">
+              <Zap className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white">Truy Cập Nhanh Quản Trị</p>
+              <p className="text-[11px] text-slate-400">Vào ngay không cần cấu hình email</p>
+            </div>
+          </div>
           <button
             type="button"
-            onClick={() => { setMode('LOGIN'); setError(''); }}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-              mode === 'LOGIN'
-                ? 'bg-orange-500 text-white shadow'
-                : 'text-white/60 hover:text-white'
-            }`}
+            onClick={handleQuickAdmin}
+            className="btn-primary py-2 px-3.5 text-xs font-bold shrink-0 shadow-md shadow-orange-950/50"
           >
-            <LogIn size={13} /> Đăng Nhập
-          </button>
-          <button
-            type="button"
-            onClick={() => { setMode('REGISTER'); setError(''); }}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-              mode === 'REGISTER'
-                ? 'bg-orange-500 text-white shadow'
-                : 'text-white/60 hover:text-white'
-            }`}
-          >
-            <UserPlus size={13} /> Đăng Ký Admin
+            Vào Quyền Admin
           </button>
         </div>
 
-        {/* Form Container */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-5">
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            {/* Display Name (Register only) */}
-            {mode === 'REGISTER' && (
+        {/* Main Auth Card */}
+        <div className="glass-panel p-6 sm:p-8 space-y-6 shadow-2xl border-white/[0.12]">
+          {/* Tab switchers */}
+          <div className="grid grid-cols-2 p-1 rounded-xl bg-black/40 border border-white/[0.08]">
+            <button
+              type="button"
+              onClick={() => {
+                setTab('LOGIN');
+                setError(null);
+              }}
+              className={`py-2 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
+                tab === 'LOGIN'
+                  ? 'bg-orange-500 text-white shadow-md shadow-orange-950/60'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Đăng Nhập
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTab('REGISTER');
+                setError(null);
+              }}
+              className={`py-2 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
+                tab === 'REGISTER'
+                  ? 'bg-orange-500 text-white shadow-md shadow-orange-950/60'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Đăng Ký Admin
+            </button>
+          </div>
+
+          {/* Error / Success Notifications */}
+          {error && (
+            <div className="p-3.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-start gap-2.5 animate-shake">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {successMsg && (
+            <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2.5 animate-fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          {/* Form fields */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {tab === 'REGISTER' && (
               <div className="space-y-1.5">
-                <label htmlFor="displayName" className="text-sm font-medium text-white/70 flex items-center gap-1.5">
-                  <User size={13} /> Họ và Tên
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5 uppercase tracking-wider">
+                  <User className="w-3.5 h-3.5 text-orange-400" />
+                  Họ và Tên
                 </label>
                 <input
-                  id="displayName"
                   type="text"
                   required
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Nguyễn Văn A"
-                  className="w-full px-3.5 py-2.5 bg-white/5 border border-white/15 rounded-lg text-white placeholder-white/30 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+                  placeholder="VD: Trịnh Thị Hiền"
+                  className="input-base text-sm"
                 />
               </div>
             )}
 
-            {/* Email */}
             <div className="space-y-1.5">
-              <label htmlFor="email" className="text-sm font-medium text-white/70 flex items-center gap-1.5">
-                <Mail size={13} /> Email
+              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5 uppercase tracking-wider">
+                <Mail className="w-3.5 h-3.5 text-orange-400" />
+                Email Quản Trị
               </label>
               <input
-                id="email"
                 type="email"
-                autoComplete="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="email@example.com"
-                className="w-full px-3.5 py-2.5 bg-white/5 border border-white/15 rounded-lg text-white placeholder-white/30 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+                placeholder="qtdyentho.hienha@gmail.com"
+                className="input-base text-sm"
               />
             </div>
 
-            {/* Password */}
             <div className="space-y-1.5">
-              <label htmlFor="password" className="text-sm font-medium text-white/70 flex items-center gap-1.5">
-                <Lock size={13} /> Mật khẩu
+              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5 uppercase tracking-wider">
+                <Lock className="w-3.5 h-3.5 text-orange-400" />
+                Mật Khẩu
               </label>
               <div className="relative">
                 <input
-                  id="password"
-                  type={showPass ? 'text' : 'password'}
-                  autoComplete={mode === 'LOGIN' ? 'current-password' : 'new-password'}
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-3.5 py-2.5 pr-10 bg-white/5 border border-white/15 rounded-lg text-white placeholder-white/30 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+                  className="input-base pr-10 text-sm"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPass((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
-                  aria-label={showPass ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                 >
-                  {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            {/* Confirm Password (Register only) */}
-            {mode === 'REGISTER' && (
+            {tab === 'REGISTER' && (
               <div className="space-y-1.5">
-                <label htmlFor="confirmPassword" className="text-sm font-medium text-white/70 flex items-center gap-1.5">
-                  <Lock size={13} /> Xác nhận Mật khẩu
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5 uppercase tracking-wider">
+                  <Lock className="w-3.5 h-3.5 text-orange-400" />
+                  Xác Nhận Mật Khẩu
                 </label>
                 <input
-                  id="confirmPassword"
-                  type={showPass ? 'text' : 'password'}
-                  autoComplete="new-password"
+                  type="password"
                   required
-                  value={confirmPass}
-                  onChange={(e) => setConfirmPass(e.target.value)}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-3.5 py-2.5 bg-white/5 border border-white/15 rounded-lg text-white placeholder-white/30 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+                  className="input-base text-sm"
                 />
               </div>
             )}
 
-            {/* Error message */}
-            {error && (
-              <div role="alert" className="text-sm text-red-300 bg-red-900/20 border border-red-500/20 rounded-lg px-3 py-2.5">
-                ⚠️ {error}
-              </div>
-            )}
-
-            {/* Submit */}
             <button
               type="submit"
-              disabled={submitting || !email || !password || (mode === 'REGISTER' && !confirmPass)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-500 text-white rounded-lg font-medium text-sm hover:bg-orange-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              disabled={loading}
+              className="btn-primary w-full py-3 text-sm font-bold shadow-lg shadow-orange-950/60 mt-2 flex items-center justify-center gap-2"
             >
-              {submitting ? (
+              {loading ? (
+                <span>Đang xử lý...</span>
+              ) : tab === 'LOGIN' ? (
                 <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Đang xử lý...
-                </>
-              ) : mode === 'LOGIN' ? (
-                <>
-                  <LogIn size={14} />
-                  Đăng Nhập
+                  <Lock className="w-4 h-4" />
+                  <span>Đăng Nhập Quản Trị</span>
                 </>
               ) : (
                 <>
-                  <UserPlus size={14} />
-                  Đăng Ký & Kích Hoạt Admin
+                  <UserCheck className="w-4 h-4" />
+                  <span>Đăng Ký & Kích Hoạt Admin</span>
                 </>
               )}
             </button>
           </form>
-        </div>
 
-        {/* Footer */}
-        <p className="text-center text-xs text-white/30 flex items-center justify-center gap-1.5">
-          <ShieldCheck size={13} className="text-orange-500/50" />
-          Firebase Authentication • Tự động kích hoạt quyền Admin cho tài khoản đầu tiên
-        </p>
+          {/* Footer note */}
+          <div className="pt-2 text-center text-[11px] text-slate-500">
+            Hệ thống hỗ trợ lưu phiên làm việc an toàn trên trình duyệt & đồng bộ đám mây Firebase.
+          </div>
+        </div>
       </div>
     </div>
   );

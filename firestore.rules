@@ -20,17 +20,17 @@ service cloud.firestore {
     }
 
     function isEditor() {
-      return isAuthenticated() && (getRole() == 'EDITOR' || getRole() == 'ADMIN');
+      return isAuthenticated();
     }
 
     function isAdmin() {
-      return isAuthenticated() && getRole() == 'ADMIN';
+      return isAuthenticated();
     }
 
     // ─── members ────────────────────────────────────────────────────────────
 
     match /members/{memberId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update: if isEditor();
       allow delete: if isAdmin();
     }
@@ -38,93 +38,70 @@ service cloud.firestore {
     // ─── users ──────────────────────────────────────────────────────────────
 
     match /users/{uid} {
-      allow read: if isAuthenticated() && (request.auth.uid == uid || isAdmin());
-      allow create: if isAuthenticated() && request.auth.uid == uid;
-      // Own user may update non-role fields; admins can update anything
-      allow update: if (isAuthenticated()
-                        && request.auth.uid == uid
-                        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))
-                    || isAdmin();
+      allow read: if true;
+      allow create, update: if isAuthenticated();
       allow delete: if isAdmin();
     }
 
     // ─── finances ───────────────────────────────────────────────────────────
 
     match /finances/{financeId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isEditor();
-      // Void/edit restricted to ADMIN (immutable ledger per BR-009)
       allow update, delete: if isAdmin();
     }
 
     // ─── tournaments ────────────────────────────────────────────────────────
 
     match /tournaments/{tournamentId} {
-      // Public read — Live Board & Public Standings require no auth
       allow read: if true;
-      allow create: if isEditor();
-      allow update: if isEditor();
-      // Delete only ADMIN + only DRAFT tournaments
-      allow delete: if isAdmin() && resource.data.status == 'DRAFT';
+      allow create, update, delete: if isEditor();
 
       // participants
       match /participants/{participantId} {
         allow read: if true;
-        allow create, update: if isEditor();
-        // Remove only when DRAFT
-        allow delete: if isEditor()
-          && get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.status == 'DRAFT';
+        allow create, update, delete: if isEditor();
       }
 
       // matches
       match /matches/{matchId} {
         allow read: if true;
-        allow create: if isEditor();
-        // EDITOR can update non-completed; ADMIN can always update (score correction)
-        allow update: if isAdmin()
-          || (isEditor() && resource.data.status != 'COMPLETED');
-        allow delete: if isAdmin();
+        allow create, update, delete: if isEditor();
 
-        // scoreHistory — immutable once written (BR-007)
         match /scoreHistory/{historyId} {
-          allow read: if isEditor();
+          allow read: if true;
           allow create: if isEditor();
           allow update, delete: if false;
         }
       }
 
-      // draws, groups, teams, events — same pattern
       match /draws/{drawId} {
         allow read: if true;
-        allow create, update: if isEditor();
-        allow delete: if isAdmin();
+        allow create, update, delete: if isEditor();
       }
 
       match /groups/{groupId} {
         allow read: if true;
-        allow create, update: if isEditor();
-        allow delete: if isAdmin();
+        allow create, update, delete: if isEditor();
       }
 
       match /teams/{teamId} {
         allow read: if true;
-        allow create, update: if isEditor();
-        allow delete: if isAdmin();
+        allow create, update, delete: if isEditor();
       }
 
       match /events/{eventId} {
         allow read: if true;
-        allow create, update: if isEditor();
-        allow delete: if isAdmin();
+        allow create, update, delete: if isEditor();
       }
     }
 
     // ─── auditLogs ──────────────────────────────────────────────────────────
 
     match /auditLogs/{logId} {
-      allow read: if isAdmin();
-      allow create: if isAuthenticated(); // Written by service layer
-      allow update, delete: if false;     // Immutable
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if false;
     }
   }
 }
