@@ -53,8 +53,6 @@ export interface MemberFilter {
   gender?: Gender;
 }
 
-import { INITIAL_SEED_MEMBERS } from '../mockData';
-
 export async function getMembers(filter: MemberFilter = {}): Promise<Member[]> {
   try {
     const colRef = collection(db, COLLECTIONS.MEMBERS);
@@ -71,21 +69,10 @@ export async function getMembers(filter: MemberFilter = {}): Promise<Member[]> {
       : query(colRef, orderBy('fullName', 'asc'));
 
     const snap = await getDocs(q);
-    if (snap.empty) {
-      let res = [...INITIAL_SEED_MEMBERS];
-      if (filter.status) res = res.filter((m) => m.status === filter.status);
-      if (filter.school) res = res.filter((m) => m.school === filter.school);
-      if (filter.gender) res = res.filter((m) => m.gender === filter.gender);
-      return res;
-    }
     return snap.docs.map((d) => docToMember(d.id, d.data()));
   } catch (err) {
-    console.warn('[MembersService] getMembers fallback to seed data:', err);
-    let res = [...INITIAL_SEED_MEMBERS];
-    if (filter.status) res = res.filter((m) => m.status === filter.status);
-    if (filter.school) res = res.filter((m) => m.school === filter.school);
-    if (filter.gender) res = res.filter((m) => m.gender === filter.gender);
-    return res;
+    console.error('[MembersService] getMembers error from Firestore:', err);
+    return [];
   }
 }
 
@@ -93,14 +80,12 @@ export async function getMember(memberId: string): Promise<Member | null> {
   try {
     const snap = await getDoc(doc(db, COLLECTIONS.MEMBERS, memberId));
     if (!snap.exists()) {
-      const fallback = INITIAL_SEED_MEMBERS.find((m) => m.id === memberId);
-      return fallback || null;
+      return null;
     }
     return docToMember(snap.id, snap.data());
   } catch (err) {
-    console.warn('[MembersService] getMember fallback to seed data:', err);
-    const fallback = INITIAL_SEED_MEMBERS.find((m) => m.id === memberId);
-    return fallback || null;
+    console.error('[MembersService] getMember error from Firestore:', err);
+    return null;
   }
 }
 

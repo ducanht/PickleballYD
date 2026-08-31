@@ -40,8 +40,6 @@ function docToTournament(id: string, data: DocumentData): Tournament {
   return { id, ...data } as Tournament;
 }
 
-import { INITIAL_SEED_TOURNAMENTS, INITIAL_SEED_MATCHES } from '../mockData';
-
 // ── Tournament CRUD ───────────────────────────────────────────────────────────
 
 export async function getTournaments(status?: TournamentStatus): Promise<Tournament[]> {
@@ -50,17 +48,10 @@ export async function getTournaments(status?: TournamentStatus): Promise<Tournam
     const snap = status
       ? await getDocs(query(colRef, where('status', '==', status), orderBy('startDate', 'desc')))
       : await getDocs(query(colRef, orderBy('startDate', 'desc')));
-    if (snap.empty) {
-      return status
-        ? INITIAL_SEED_TOURNAMENTS.filter((t) => t.status === status)
-        : INITIAL_SEED_TOURNAMENTS;
-    }
     return snap.docs.map((d) => docToTournament(d.id, d.data()));
   } catch (err) {
-    console.warn('[TournamentService] getTournaments fallback to seed data:', err);
-    return status
-      ? INITIAL_SEED_TOURNAMENTS.filter((t) => t.status === status)
-      : INITIAL_SEED_TOURNAMENTS;
+    console.error('[TournamentService] getTournaments error from Firestore:', err);
+    return [];
   }
 }
 
@@ -68,14 +59,12 @@ export async function getTournament(id: string): Promise<Tournament | null> {
   try {
     const snap = await getDoc(doc(db, COLLECTIONS.TOURNAMENTS, id));
     if (!snap.exists()) {
-      const fallback = INITIAL_SEED_TOURNAMENTS.find((t) => t.id === id);
-      return fallback || null;
+      return null;
     }
     return docToTournament(snap.id, snap.data());
   } catch (err) {
-    console.warn('[TournamentService] getTournament fallback to seed data:', err);
-    const fallback = INITIAL_SEED_TOURNAMENTS.find((t) => t.id === id);
-    return fallback || null;
+    console.error('[TournamentService] getTournament error from Firestore:', err);
+    return null;
   }
 }
 
@@ -290,13 +279,10 @@ export async function getMatches(
     const snap = await getDocs(
       query(collection(db, COLLECTIONS.matches(tournamentId)), ...conditions)
     );
-    if (snap.empty && INITIAL_SEED_MATCHES[tournamentId]) {
-      return INITIAL_SEED_MATCHES[tournamentId];
-    }
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Match);
   } catch (err) {
-    console.warn('[TournamentService] getMatches fallback to seed data:', err);
-    return INITIAL_SEED_MATCHES[tournamentId] || [];
+    console.error('[TournamentService] getMatches error from Firestore:', err);
+    return [];
   }
 }
 
