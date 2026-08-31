@@ -51,21 +51,31 @@ export interface FinanceFilter {
 export async function getTransactions(filter: FinanceFilter = {}): Promise<Finance[]> {
   try {
     const colRef = collection(db, COLLECTIONS.FINANCES);
-    const conditions: Parameters<typeof query>[1][] = [];
+    const snap = await getDocs(colRef);
+    let list = snap.docs.map((d) => docToFinance(d.id, d.data()));
 
-    if (filter.type) conditions.push(where('type', '==', filter.type));
-    if (filter.year) conditions.push(where('year', '==', filter.year));
-    if (filter.tournamentId) conditions.push(where('tournamentId', '==', filter.tournamentId));
-    if (filter.status) conditions.push(where('status', '==', filter.status));
+    // In-memory filter
+    if (filter.type) {
+      list = list.filter((t) => t.type === filter.type);
+    }
+    if (filter.year) {
+      list = list.filter((t) => t.year === filter.year);
+    }
+    if (filter.tournamentId) {
+      list = list.filter((t) => t.tournamentId === filter.tournamentId);
+    }
+    if (filter.status) {
+      list = list.filter((t) => t.status === filter.status);
+    }
 
-    conditions.push(orderBy('timestamp', 'desc'));
+    // Sort by timestamp desc
+    list.sort((a, b) => {
+      const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : new Date(a.timestamp as unknown as string).getTime() || 0;
+      const timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : new Date(b.timestamp as unknown as string).getTime() || 0;
+      return timeB - timeA;
+    });
 
-    const q = conditions.length > 0
-      ? query(colRef, ...conditions) as Query<DocumentData>
-      : query(colRef, orderBy('timestamp', 'desc'));
-
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => docToFinance(d.id, d.data()));
+    return list;
   } catch (err) {
     console.warn('[FinanceService] getTransactions fallback to empty list:', err);
     return [];

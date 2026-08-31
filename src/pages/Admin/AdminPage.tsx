@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { collection, getDocs, query, orderBy, limit, doc, updateDoc } from 'firebase/firestore';
 import { db, COLLECTIONS } from '../../api/firebase';
 import { useIsAdmin } from '../../contexts/AuthContext';
+import { signUp } from '../../features/auth/authService';
 import {
   recalculateAllMembersStats,
   validateDatabaseIntegrity,
@@ -17,6 +18,12 @@ import {
   CheckCircle2,
   RefreshCw,
   Database,
+  UserPlus,
+  X,
+  Lock,
+  Mail,
+  User,
+  Shield,
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -26,6 +33,16 @@ export default function AdminPage() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingUid, setUpdatingUid] = useState<string | null>(null);
+
+  // Provisioning Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+  const [newDisplayName, setNewDisplayName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState<UserRole>('EDITOR');
 
   // Admin Tools state
   const [rebuilding, setRebuilding] = useState(false);
@@ -79,6 +96,44 @@ export default function AdminPage() {
     }
   };
 
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError(null);
+    setCreateSuccess(null);
+
+    if (newPassword.length < 6) {
+      setCreateError('Mật khẩu khởi tạo phải có ít nhất 6 ký tự.');
+      return;
+    }
+
+    setCreateLoading(true);
+    try {
+      await signUp(newEmail.trim(), newPassword, newDisplayName.trim());
+
+      const userSnap = await getDocs(collection(db, COLLECTIONS.USERS));
+      const found = userSnap.docs.find(d => d.data().email === newEmail.trim());
+      if (found) {
+        await updateDoc(doc(db, COLLECTIONS.USERS, found.id), { role: newRole });
+      }
+
+      setCreateSuccess(`Đã cấp tài khoản thành công cho ${newDisplayName} (${newRole})!`);
+      setNewDisplayName('');
+      setNewEmail('');
+      setNewPassword('');
+      setNewRole('EDITOR');
+      loadData();
+
+      setTimeout(() => {
+        setShowCreateModal(false);
+        setCreateSuccess(null);
+      }, 1500);
+    } catch (err: unknown) {
+      setCreateError((err as Error).message || 'Lỗi khi cấp tài khoản.');
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -115,16 +170,25 @@ export default function AdminPage() {
     <div className="page-container animate-fade-in-up">
       {/* Header */}
       <div className="card mb-6">
-        <div className="flex items-center gap-3">
-          <ShieldCheck className="w-7 h-7 text-orange-500" />
-          <div>
-            <h1 className="text-2xl font-extrabold text-white tracking-tight">
-              Quản Trị Hệ Thống
-            </h1>
-            <p className="text-slate-400 text-sm">
-              Phân quyền người dùng, kiểm soát audit log và nhật ký hệ thống
-            </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <ShieldCheck className="w-7 h-7 text-orange-500" />
+            <div>
+              <h1 className="text-2xl font-extrabold text-white tracking-tight">
+                Quản Trị Hệ Thống
+              </h1>
+              <p className="text-slate-400 text-sm">
+                Cấp tài khoản, phân quyền người dùng và kiểm soát audit log
+              </p>
+            </div>
           </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="btn-primary text-xs sm:text-sm font-bold flex items-center gap-2 self-start sm:self-auto cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            Cấp Tài Khoản Mới
+          </button>
         </div>
       </div>
 
@@ -294,6 +358,131 @@ export default function AdminPage() {
                 </table>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Cấp Tài Khoản Mới ────────────────────────────────────── */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="glass-panel w-full max-w-md p-6 sm:p-8 space-y-5 border-orange-500/30 shadow-2xl relative">
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-orange-400" />
+                Cấp Tài Khoản Mới (Admin Only)
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setCreateError(null);
+                }}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/[0.05] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {createError && (
+              <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{createError}</span>
+              </div>
+            )}
+
+            {createSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{createSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5 uppercase">
+                  <User className="w-3.5 h-3.5 text-orange-400" />
+                  Họ và Tên Cán Bộ / Trọng Tài
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newDisplayName}
+                  onChange={(e) => setNewDisplayName(e.target.value)}
+                  placeholder="VD: Trọng Tài Nguyễn Văn A"
+                  className="input-base text-sm"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5 uppercase">
+                  <Mail className="w-3.5 h-3.5 text-orange-400" />
+                  Email Đăng Nhập
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="trongtai@pickleball.vn"
+                  className="input-base text-sm"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5 uppercase">
+                  <Lock className="w-3.5 h-3.5 text-orange-400" />
+                  Mật Khẩu Khởi Tạo
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Tối thiểu 6 ký tự (VD: 12345678)"
+                  className="input-base text-sm"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5 uppercase">
+                  <Shield className="w-3.5 h-3.5 text-orange-400" />
+                  Phân Quyền Vai Trò
+                </label>
+                <select
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value as UserRole)}
+                  className="input-base text-sm cursor-pointer"
+                >
+                  <option value="EDITOR">EDITOR — Trọng tài (Nhập điểm, cập nhật kết quả)</option>
+                  <option value="ADMIN">ADMIN — Ban Quản Trị (Toàn quyền quản lý giải)</option>
+                  <option value="VIEWER">VIEWER — Người xem (Chỉ xem thông tin)</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="btn-secondary flex-1 py-2.5 text-xs font-bold cursor-pointer"
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={createLoading}
+                  className="btn-primary flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {createLoading ? (
+                    <span>Đang tạo tài khoản...</span>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      <span>Xác Nhận Cấp Tài Khoản</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

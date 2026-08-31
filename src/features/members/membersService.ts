@@ -56,20 +56,24 @@ export interface MemberFilter {
 export async function getMembers(filter: MemberFilter = {}): Promise<Member[]> {
   try {
     const colRef = collection(db, COLLECTIONS.MEMBERS);
-    const conditions: Parameters<typeof query>[1][] = [];
+    const snap = await getDocs(colRef);
+    let list = snap.docs.map((d) => docToMember(d.id, d.data()));
 
-    if (filter.status) conditions.push(where('status', '==', filter.status));
-    if (filter.school) conditions.push(where('school', '==', filter.school));
-    if (filter.gender) conditions.push(where('gender', '==', filter.gender));
+    // In-memory filter to avoid composite index requirements
+    if (filter.status) {
+      list = list.filter((m) => m.status === filter.status);
+    }
+    if (filter.school) {
+      list = list.filter((m) => m.school === filter.school);
+    }
+    if (filter.gender) {
+      list = list.filter((m) => m.gender === filter.gender);
+    }
 
-    conditions.push(orderBy('fullName', 'asc'));
+    // Sort by Vietnamese full name
+    list.sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'));
 
-    const q = conditions.length > 0
-      ? query(colRef, ...conditions) as Query<DocumentData>
-      : query(colRef, orderBy('fullName', 'asc'));
-
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => docToMember(d.id, d.data()));
+    return list;
   } catch (err) {
     console.error('[MembersService] getMembers error from Firestore:', err);
     return [];

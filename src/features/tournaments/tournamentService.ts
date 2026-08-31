@@ -45,10 +45,20 @@ function docToTournament(id: string, data: DocumentData): Tournament {
 export async function getTournaments(status?: TournamentStatus): Promise<Tournament[]> {
   try {
     const colRef = collection(db, COLLECTIONS.TOURNAMENTS);
-    const snap = status
-      ? await getDocs(query(colRef, where('status', '==', status), orderBy('startDate', 'desc')))
-      : await getDocs(query(colRef, orderBy('startDate', 'desc')));
-    return snap.docs.map((d) => docToTournament(d.id, d.data()));
+    const snap = await getDocs(colRef);
+    let list = snap.docs.map((d) => docToTournament(d.id, d.data()));
+
+    if (status) {
+      list = list.filter((t) => t.status === status);
+    }
+
+    list.sort((a, b) => {
+      const dateA = a.startDate?.toMillis ? a.startDate.toMillis() : new Date(a.startDate as unknown as string).getTime() || 0;
+      const dateB = b.startDate?.toMillis ? b.startDate.toMillis() : new Date(b.startDate as unknown as string).getTime() || 0;
+      return dateB - dateA;
+    });
+
+    return list;
   } catch (err) {
     console.error('[TournamentService] getTournaments error from Firestore:', err);
     return [];
