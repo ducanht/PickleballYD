@@ -148,10 +148,13 @@ body {
 .badge-orange   { background: rgba(255, 107, 0, 0.15); color: #ff8533; border: 1px solid rgba(255, 107, 0, 0.3); }
 .badge-blue     { background: rgba(59, 130, 246, 0.15);  color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
 .badge-emerald  { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-.badge-red      { background: rgba(239, 68, 68, 0.15);   color: #f87171; border: 1px solid rgba(239, 68 68, 0.3); }
+.badge-red      { background: rgba(239, 68, 68, 0.15);   color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
 .badge-yellow   { background: rgba(245, 158, 11, 0.15);  color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
 .badge-purple   { background: rgba(168, 85, 247, 0.15);  color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
 .badge-navy     { background: rgba(26, 39, 66, 0.8);     color: #94a9d4; border: 1px solid rgba(67, 96, 158, 0.4); }
+/* Aliases used widely across pages */
+.badge-green    { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+.badge-gray     { background: rgba(148, 163, 184, 0.12); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.25); }
 
 /* ── Status Badges ── */
 .status-draft     { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.25rem 0.65rem; border-radius: 9999px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; background: rgba(148, 163, 184, 0.12); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.25); }
@@ -323,3 +326,35 @@ body {
 .animate-slide-up {
   animation: slideUpFade 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* ── Card Component (used globally across all pages) ── */
+.card {
+  background: rgba(14, 21, 36, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-xl);
+  padding: 1.25rem;
+  box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.3);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* ── Animations (used on page mount and modal open) ── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
