@@ -2,23 +2,17 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   signIn,
-  signUp,
-  loginAsDemoAdmin,
 } from '../features/auth/authService';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Trophy,
-  Shield,
   Eye,
   EyeOff,
-  Sparkles,
-  UserCheck,
-  Zap,
   Lock,
   Mail,
-  User,
   CheckCircle2,
   AlertCircle,
+  GraduationCap,
 } from 'lucide-react';
 
 export default function LoginPage() {
@@ -69,14 +63,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickAdmin = () => {
-    loginAsDemoAdmin('Trịnh Thị Hiền', email.trim() || 'qtdyentho.hienha@gmail.com');
-    setSuccessMsg('Đã kích hoạt phiên Quản Trị Viên thành công!');
-    setTimeout(() => {
-      navigate(from, { replace: true });
-    }, 400);
-  };
-
   return (
     <div className="min-h-[85vh] flex items-center justify-center px-4 py-12 relative overflow-hidden">
       {/* Background radial glows */}
@@ -84,36 +70,21 @@ export default function LoginPage() {
 
       <div className="w-full max-w-md relative z-10 space-y-6">
         {/* Top brand header */}
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-2.5">
           <div className="inline-flex p-3 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-500 text-white shadow-xl shadow-orange-950/60 ring-4 ring-white/10">
-            <Trophy className="w-8 h-8" />
+            <GraduationCap className="w-8 h-8" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight font-display">
-            Pickleball Yên Định K98-01
+            Hội Cựu Học Sinh Yên Định - Thanh Hoá
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400">
-            Cổng quản trị giải đấu & cập nhật kết quả thi đấu
-          </p>
-        </div>
-
-        {/* Quick Admin Access Card */}
-        <div className="glass-card p-4 border-orange-500/30 bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0 border border-orange-500/30">
-              <Zap className="w-5 h-5 animate-pulse" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-white">Truy Cập Nhanh Quản Trị</p>
-              <p className="text-[11px] text-slate-400">Vào ngay không cần cấu hình email</p>
-            </div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/15 border border-orange-500/30 text-orange-400 text-xs font-bold">
+            <span>Khóa 1998 – 2001</span>
+            <span className="text-white/30">•</span>
+            <span className="text-slate-300">THPT Yên Định 1 - 2 - 3</span>
           </div>
-          <button
-            type="button"
-            onClick={handleQuickAdmin}
-            className="btn-primary py-2 px-3.5 text-xs font-bold shrink-0 shadow-md shadow-orange-950/50"
-          >
-            Vào Quyền Admin
-          </button>
+          <p className="text-xs sm:text-sm text-slate-400">
+            Cổng thông tin & quản trị giải đấu thể thao cựu học sinh
+          </p>
         </div>
 
         {/* Main Auth Card */}

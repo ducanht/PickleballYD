@@ -1,16 +1,23 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Xác Thực 23 VĐV Thật và Quản Trị Cấp Tài Khoản', () => {
-  test('Hiển thị đầy đủ 23 thành viên thật trên trang /members (sau khi đăng nhập)', async ({ page }) => {
-    // Đăng nhập nhanh
+test.describe('Hội Cựu Học Sinh Yên Định - Thanh Hoá (Khóa 1998-2001)', () => {
+  test('Hiển thị đầy đủ 23 thành viên thật trên trang /members (sau khi đăng nhập chuẩn)', async ({ page }) => {
+    // Đăng nhập bằng tài khoản Quản trị viên
     await page.goto('/login');
-    await page.click('button:has-text("Vào Quyền Admin")');
-    await page.waitForURL('**/tournaments');
+    await expect(page.locator('h1')).toContainText('Hội Cựu Học Sinh Yên Định - Thanh Hoá');
+    
+    // Xác nhận không còn nút Đăng nhập nhanh
+    const quickAdminBtn = page.locator('button:has-text("Vào Quyền Admin")');
+    await expect(quickAdminBtn).toHaveCount(0);
+
+    // Điền thông tin và đăng nhập
+    await page.fill('input[type="email"]', 'qtdyentho.hienha@gmail.com');
+    await page.fill('input[type="password"]', '12345678');
+    await page.click('button:has-text("Đăng Nhập Quản Trị")');
+    await page.waitForURL('**/tournaments', { timeout: 15000 });
 
     // Điều hướng vào trang Vận Động Viên
     await page.goto('/members');
-    
-    // Đợi tiêu đề hoặc bảng thành viên tải xong
     await expect(page.locator('h1')).toContainText('Thành viên');
     
     // Đợi danh sách thẻ thành viên xuất hiện
@@ -28,24 +35,26 @@ test.describe('Xác Thực 23 VĐV Thật và Quản Trị Cấp Tài Khoản', 
     await page.screenshot({ path: 'test-results/members-list-23-athletes.png', fullPage: true });
   });
 
-  test('Trang /login chỉ có Đăng Nhập, đã loại bỏ Đăng Ký Admin công khai', async ({ page }) => {
+  test('Trang /login có nhận diện thương hiệu Hội Cựu Học Sinh Yên Định - Thanh Hoá và không có Đăng Ký', async ({ page }) => {
     await page.goto('/login');
     
+    await expect(page.locator('h1')).toContainText('Hội Cựu Học Sinh Yên Định - Thanh Hoá');
     await expect(page.locator('h2')).toContainText('Đăng Nhập Quản Trị Viên');
     
-    // Đảm bảo không còn nút hay tab Đăng Ký Admin
-    const registerTab = page.locator('button:has-text("Đăng Ký Admin")');
-    await expect(registerTab).toHaveCount(0);
+    // Đảm bảo không còn nút Đăng Ký Admin hay Nút Đăng nhập nhanh
+    await expect(page.locator('button:has-text("Đăng Ký Admin")')).toHaveCount(0);
+    await expect(page.locator('button:has-text("Vào Quyền Admin")')).toHaveCount(0);
     
     // Chụp ảnh trang login
     await page.screenshot({ path: 'test-results/login-admin-only.png' });
   });
 
   test('Trang /admin có nút Cấp Tài Khoản Mới và Modal hoạt động', async ({ page }) => {
-    // Đăng nhập Admin qua nút Truy cập nhanh
     await page.goto('/login');
-    await page.click('button:has-text("Vào Quyền Admin")');
-    await page.waitForURL('**/tournaments');
+    await page.fill('input[type="email"]', 'qtdyentho.hienha@gmail.com');
+    await page.fill('input[type="password"]', '12345678');
+    await page.click('button:has-text("Đăng Nhập Quản Trị")');
+    await page.waitForURL('**/tournaments', { timeout: 15000 });
     
     // Điều hướng tới /admin
     await page.goto('/admin');
@@ -63,3 +72,4 @@ test.describe('Xác Thực 23 VĐV Thật và Quản Trị Cấp Tài Khoản', 
     await page.screenshot({ path: 'test-results/admin-provision-user-modal.png' });
   });
 });
+

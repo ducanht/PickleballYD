@@ -59,8 +59,8 @@ function AppLayout({ children, hideHeader = false }: { children: React.ReactNode
         </Suspense>
       </main>
       {!hideHeader && (
-        <footer className="border-t border-white/10 py-4 text-center text-xs text-white/30">
-          © 2026 Hội Cựu Học Sinh Yên Định 1998–2001 • Pickleball Hub
+        <footer className="border-t border-white/10 py-4 text-center text-xs text-white/40">
+          © 2026 Hội Cựu Học Sinh Yên Định - Thanh Hoá • Khóa 1998–2001 (Yên Định 1 - 2 - 3)
         </footer>
       )}
     </div>

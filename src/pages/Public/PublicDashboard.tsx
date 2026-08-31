@@ -104,22 +104,22 @@ export default function PublicDashboard() {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.04] border border-orange-500/30 text-orange-400 text-xs sm:text-sm font-semibold shadow-inner shadow-orange-500/10 backdrop-blur-md animate-fade-in">
             <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse-glow" />
-            <span>Hội Cựu Học Sinh Yên Định 1998 – 2001</span>
+            <span>Hội Cựu Học Sinh Yên Định - Thanh Hoá</span>
             <span className="hidden sm:inline text-white/30">•</span>
-            <span className="hidden sm:inline text-slate-300">Yên Định 1 - 2 - 3</span>
+            <span className="hidden sm:inline text-slate-300">Khóa 1998 – 2001 (Yên Định 1 - 2 - 3)</span>
           </div>
 
           {/* Main Title */}
           <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight leading-[1.08] font-display">
-            Sân Chơi Thể Thao <br className="hidden sm:block" />
+            Giải Thể Thao Pickleball <br className="hidden sm:block" />
             <span className="bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500 bg-clip-text text-transparent drop-shadow-sm">
-              Pickleball Đỉnh Cao
+              Cựu Học Sinh K98-01
             </span>
           </h1>
 
           {/* Subtitle */}
           <p className="text-slate-300 text-base sm:text-lg md:text-xl max-w-2xl mx-auto leading-relaxed font-normal">
-            Hệ thống quản lý giải đấu thể thao thông minh, bốc thăm tự động, cập nhật điểm số trực tiếp thời gian thực và công khai quỹ tài chính minh bạch.
+            Cổng thông tin thi đấu thể thao, bốc thăm giải đấu, cập nhật kết quả trực tiếp và công khai quỹ tài chính Hội cựu học sinh Yên Định - Thanh Hoá (Khóa 1998–2001).
           </p>
 
           {/* Action CTAs */}

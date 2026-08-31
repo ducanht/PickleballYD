@@ -83,15 +83,15 @@ export default function Header() {
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-display font-extrabold text-white text-base tracking-tight leading-none group-hover:text-orange-400 transition-colors">
-                  Pickleball Hub
+                <span className="font-display font-extrabold text-white text-sm sm:text-base tracking-tight leading-none group-hover:text-orange-400 transition-colors">
+                  Cựu HS Yên Định - Thanh Hoá
                 </span>
                 <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-orange-500/20 text-orange-400 font-bold border border-orange-500/30">
                   K98-01
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 font-medium tracking-wide mt-0.5">
-                Yên Định 1998 – 2001
+                Khóa 1998 – 2001 • Yên Định 1 - 2 - 3
               </p>
             </div>
           </button>
