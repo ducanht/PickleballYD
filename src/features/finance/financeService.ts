@@ -86,15 +86,10 @@ export async function getFinanceSummary(filter: Omit<FinanceFilter, 'type' | 'st
       else totalOut += t.amount;
     }
 
-    if (totalIn === 0 && totalOut === 0) {
-      // Default initial balance for demo
-      return { totalIn: 8500000, totalOut: 3300000, balance: 5200000 };
-    }
-
     return { totalIn, totalOut, balance: totalIn - totalOut };
   } catch (err) {
     console.warn('[FinanceService] getFinanceSummary fallback:', err);
-    return { totalIn: 8500000, totalOut: 3300000, balance: 5200000 };
+    return { totalIn: 0, totalOut: 0, balance: 0 };
   }
 }
 
