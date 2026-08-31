@@ -1,0 +1,1 @@
+import{r as e,t}from"./react-OrosJ8bI.js";import{I as n,L as r}from"./index-QkjwOySt.js";var i=e(t(),1);function a(){let{id:e}=r(),t=n();return(0,i.useEffect)(()=>{e&&t(`/tournaments/${e}/draw`,{replace:!0})},[e,t]),null}export{a as default};
