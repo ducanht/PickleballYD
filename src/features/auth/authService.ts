@@ -16,9 +16,9 @@ import {
   doc,
   getDoc,
   setDoc,
-  getDocs,
   collection,
   serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore';
 import { auth, db, COLLECTIONS } from '../../api/firebase';
 import type { AppUser, UserRole } from '../../types';
@@ -84,8 +84,8 @@ export async function fetchUserProfile(uid: string): Promise<AppUser | null> {
         email: auth.currentUser?.email || '',
         role: 'ADMIN',
         active: true,
-        createdAt: new Date(),
-        lastLoginAt: new Date(),
+        createdAt: Timestamp.now(),
+        lastLoginAt: Timestamp.now(),
       };
     }
     return { uid, ...snap.data() } as AppUser;
@@ -97,8 +97,8 @@ export async function fetchUserProfile(uid: string): Promise<AppUser | null> {
       email: auth.currentUser?.email || '',
       role: 'ADMIN',
       active: true,
-      createdAt: new Date(),
-      lastLoginAt: new Date(),
+      createdAt: Timestamp.now(),
+      lastLoginAt: Timestamp.now(),
     };
   }
 }
