@@ -6,6 +6,8 @@
  */
 import {
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   type User as FirebaseUser,
@@ -14,6 +16,8 @@ import {
   doc,
   getDoc,
   setDoc,
+  getDocs,
+  collection,
   serverTimestamp,
 } from 'firebase/firestore';
 import { auth, db, COLLECTIONS } from '../../api/firebase';
@@ -31,6 +35,39 @@ export async function signIn(email: string, password: string): Promise<void> {
       { merge: true }
     );
   }
+}
+
+// ── Sign up (First user is automatically ADMIN) ──────────────────────────────
+export async function signUp(email: string, password: string, displayName?: string): Promise<void> {
+  const cred = await createUserWithEmailAndPassword(auth, email, password);
+  const name = displayName || email.split('@')[0];
+  if (displayName) {
+    try {
+      await updateProfile(cred.user, { displayName });
+    } catch {
+      // Non-blocking
+    }
+  }
+
+  // If first user, make ADMIN automatically
+  let isFirstUser = true;
+  try {
+    const usersSnap = await getDocs(collection(db, COLLECTIONS.USERS));
+    isFirstUser = usersSnap.empty;
+  } catch {
+    isFirstUser = true;
+  }
+
+  const role: UserRole = isFirstUser ? 'ADMIN' : 'VIEWER';
+
+  await setDoc(doc(db, COLLECTIONS.USERS, cred.user.uid), {
+    displayName: name,
+    email,
+    role,
+    active: true,
+    createdAt: serverTimestamp(),
+    lastLoginAt: serverTimestamp(),
+  });
 }
 
 // ── Sign out ─────────────────────────────────────────────────────────────────
