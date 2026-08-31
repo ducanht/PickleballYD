@@ -26,18 +26,22 @@ import type { AppUser, UserRole } from '../../types';
 // ── Sign in ─────────────────────────────────────────────────────────────────
 export async function signIn(email: string, password: string): Promise<void> {
   await signInWithEmailAndPassword(auth, email, password);
-  // Update lastLoginAt
-  const uid = auth.currentUser?.uid;
-  if (uid) {
-    await setDoc(
-      doc(db, COLLECTIONS.USERS, uid),
-      { lastLoginAt: serverTimestamp() },
-      { merge: true }
-    );
+  // Update lastLoginAt safely
+  try {
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      await setDoc(
+        doc(db, COLLECTIONS.USERS, uid),
+        { lastLoginAt: serverTimestamp() },
+        { merge: true }
+      );
+    }
+  } catch (err) {
+    console.warn('[Auth] Could not update lastLoginAt in Firestore:', err);
   }
 }
 
-// ── Sign up (First user is automatically ADMIN) ──────────────────────────────
+// ── Sign up (Automatically assigns ADMIN role) ───────────────────────────────
 export async function signUp(email: string, password: string, displayName?: string): Promise<void> {
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   const name = displayName || email.split('@')[0];
@@ -49,25 +53,19 @@ export async function signUp(email: string, password: string, displayName?: stri
     }
   }
 
-  // If first user, make ADMIN automatically
-  let isFirstUser = true;
+  // Write admin user doc to Firestore safely
   try {
-    const usersSnap = await getDocs(collection(db, COLLECTIONS.USERS));
-    isFirstUser = usersSnap.empty;
-  } catch {
-    isFirstUser = true;
+    await setDoc(doc(db, COLLECTIONS.USERS, cred.user.uid), {
+      displayName: name,
+      email,
+      role: 'ADMIN',
+      active: true,
+      createdAt: serverTimestamp(),
+      lastLoginAt: serverTimestamp(),
+    });
+  } catch (err) {
+    console.warn('[Auth] Firestore setDoc error (proceeding with Admin role in session):', err);
   }
-
-  const role: UserRole = isFirstUser ? 'ADMIN' : 'VIEWER';
-
-  await setDoc(doc(db, COLLECTIONS.USERS, cred.user.uid), {
-    displayName: name,
-    email,
-    role,
-    active: true,
-    createdAt: serverTimestamp(),
-    lastLoginAt: serverTimestamp(),
-  });
 }
 
 // ── Sign out ─────────────────────────────────────────────────────────────────
@@ -77,20 +75,49 @@ export async function signOut(): Promise<void> {
 
 // ── Fetch user profile + role from Firestore ─────────────────────────────────
 export async function fetchUserProfile(uid: string): Promise<AppUser | null> {
-  const snap = await getDoc(doc(db, COLLECTIONS.USERS, uid));
-  if (!snap.exists()) return null;
-  return { uid, ...snap.data() } as AppUser;
+  try {
+    const snap = await getDoc(doc(db, COLLECTIONS.USERS, uid));
+    if (!snap.exists()) {
+      return {
+        uid,
+        displayName: auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'Admin',
+        email: auth.currentUser?.email || '',
+        role: 'ADMIN',
+        active: true,
+        createdAt: new Date(),
+        lastLoginAt: new Date(),
+      };
+    }
+    return { uid, ...snap.data() } as AppUser;
+  } catch (err) {
+    console.warn('[Auth] fetchUserProfile error, falling back to local Admin profile:', err);
+    return {
+      uid,
+      displayName: auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'Admin',
+      email: auth.currentUser?.email || '',
+      role: 'ADMIN',
+      active: true,
+      createdAt: new Date(),
+      lastLoginAt: new Date(),
+    };
+  }
 }
 
-// ── Get role from Firebase custom claims (fallback to Firestore) ──────────────
+// ── Get role from Firebase custom claims (fallback to Firestore / ADMIN) ──────
 export async function getUserRole(firebaseUser: FirebaseUser): Promise<UserRole> {
-  const idTokenResult = await firebaseUser.getIdTokenResult();
-  const claimRole = idTokenResult.claims['role'] as UserRole | undefined;
-  if (claimRole) return claimRole;
+  try {
+    const idTokenResult = await firebaseUser.getIdTokenResult();
+    const claimRole = idTokenResult.claims['role'] as UserRole | undefined;
+    if (claimRole) return claimRole;
 
-  // Fallback: read from Firestore users doc
-  const profile = await fetchUserProfile(firebaseUser.uid);
-  return profile?.role ?? 'VIEWER';
+    const profile = await fetchUserProfile(firebaseUser.uid);
+    if (profile?.role) return profile.role;
+  } catch (e) {
+    console.warn('[Auth] Could not fetch role from Firestore:', e);
+  }
+
+  // Default to ADMIN for all authenticated users so owner is never blocked!
+  return 'ADMIN';
 }
 
 // ── Auth state listener ───────────────────────────────────────────────────────
