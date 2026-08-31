@@ -39,7 +39,7 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if isAuthenticated() && (request.auth.uid == uid || isAdmin());
-      allow create: if isAdmin();
+      allow create: if isAuthenticated() && request.auth.uid == uid;
       // Own user may update non-role fields; admins can update anything
       allow update: if (isAuthenticated()
                         && request.auth.uid == uid

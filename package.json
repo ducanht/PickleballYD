@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "npx tsx test-all-engines.ts",
+    "deploy:firebase": "firebase deploy --only hosting,firestore:rules --project yendinhk9801 --non-interactive",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -30,6 +31,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
+    "firebase-tools": "^15.28.2",
     "oxlint": "^1.79.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
